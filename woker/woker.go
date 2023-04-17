@@ -7,16 +7,19 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"oracle/smartcontract"
+	smartContract "oracle/smartContract"
+	"sync"
 	"time"
 
-	"go.etcd.io/etcd/api/v3/mvccpb"
-	clientv3 "go.etcd.io/etcd/client/v3"
+	"github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/mvcc/mvccpb"
+	"go.etcd.io/etcd/clientv3/concurrency"
 )
 
 type Job struct {
 	// length : 160
-	ID string
+	Cancel context.CancelFunc
+	ID     string
 	JobVal
 }
 
@@ -46,28 +49,31 @@ func (j Job) resolve(resp *http.Response) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// TODO: ADD RESOLVER
 	return string(body), nil
 }
 
-// TODO: add ETH CLIENT
+// TODO: add ETH CLIENT(Maybe OracleWriter will include it)
 type Worker struct {
-	// length : 160
-	ID string
 	// GroupPrefix indecates which group the worker belongs to,
 	// which determines the key range the worker watchs
 	GroupPrefix string
-	// // OracleWriter writes job result to Oracle smart contract
-	// OracleWriter OracleWiter
-	// ETCD client, Watch in specific key range
-	ETCDClient *clientv3.Client
+	ID          string
+	ETCDClient  *clientv3.Client
+
 	// GetJobs() wirtes watch response to this channel
 	// Work() read from this channel to deal with jobs
 	WatcherChan chan *Job
+	CloseChan   chan struct{}
+
+	/*
+		OracleWriter writes job result to Oracle smart contract
+	*/
 	// TODO: add ETH CLIENT
-	smartcontract.OracleWriter
+	smartContract.OracleWriter
 }
 
-func NewWoker(id string, prefix string, endpoints []string) (*Worker, error) {
+func NewWoker(id string, prefix string, endpoints []string, ow smartContract.OracleWriter) (*Worker, error) {
 	if len(id) != 160 {
 		return nil, fmt.Errorf("%s", "id length != 160")
 	}
@@ -86,7 +92,7 @@ func NewWoker(id string, prefix string, endpoints []string) (*Worker, error) {
 		GroupPrefix:  prefix,
 		ETCDClient:   cli,
 		WatcherChan:  make(chan *Job),
-		OracleWriter: nil,
+		OracleWriter: ow,
 	}, nil
 }
 
@@ -98,19 +104,53 @@ func (woker Worker) GetJobs() {
 		for _, event := range resp.Events {
 			switch event.Type {
 			case mvccpb.PUT:
-				// TODO: get ETCD distributed lock
+				modVersion := event.Kv.ModRevision
+				if modVersion == 0 { // this is a delete action, other worker has done the job
+					continue
+				}
+				cancelFunc, locked, err := woker.acquireLock(event.Kv.Key, 5)
+				if !locked || err != nil {
+					continue
+				}
 				var jobVal JobVal
-				err := json.Unmarshal(event.Kv.Value, &jobVal)
+				err = json.Unmarshal(event.Kv.Value, &jobVal)
 				if err != nil {
 					log.Println("Error unmarshalling JobVal")
 				}
 				woker.WatcherChan <- &Job{
+					Cancel: cancelFunc,
 					ID:     string(event.Kv.Key),
 					JobVal: jobVal,
 				}
+			default:
+				continue
 			}
 		}
 	}
+}
+
+func (woker Worker) acquireLock(key []byte, ttl int) (context.CancelFunc, bool, error) {
+	resp, err := woker.ETCDClient.Grant(context.Background(), int64(ttl))
+	if err != nil {
+		return nil, false, err
+	}
+	leaseID := resp.ID
+	session, err := concurrency.NewSession(woker.ETCDClient, concurrency.WithLease(leaseID))
+	if err != nil {
+		return nil, false, err
+	}
+	timeout, cancelFunc := context.WithTimeout(context.Background(), time.Duration(ttl))
+	mutex := concurrency.NewMutex(session, "/lock")
+	err = mutex.Lock(timeout)
+	if err != nil {
+		defer cancelFunc()
+		return nil, false, err
+	}
+	return cancelFunc, true, nil
+}
+
+func releaseLock(locker sync.Locker) {
+	locker.Unlock()
 }
 
 // create goroutines to deal with jobs
@@ -118,6 +158,8 @@ func (woker Worker) Work() {
 	for {
 		job := <-woker.WatcherChan
 		go func(job *Job) {
+			// release Lock
+			defer job.Cancel()
 			data, err := job.Scrap()
 			if err != nil {
 				return
@@ -125,4 +167,9 @@ func (woker Worker) Work() {
 			woker.OracleWriter.WriteData(data)
 		}(job)
 	}
+}
+
+// TODO: use CloseChan to inform other goroutines
+func (woker Worker) Close() {
+	woker.ETCDClient.Close()
 }
