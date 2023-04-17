@@ -4,53 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	smartContract "oracle/smartContract"
+	"sync"
 	"time"
 
-	"github.com/coreos/etcd/clientv3"
-	"github.com/coreos/etcd/mvcc/mvccpb"
-	"go.etcd.io/etcd/clientv3/concurrency"
+	"go.etcd.io/etcd/api/v3/mvccpb"
+	clientv3 "go.etcd.io/etcd/client/v3"
 )
-
-type Job struct {
-	// length : 160
-	Cancel context.CancelFunc
-	ID     string
-	JobVal
-}
-
-type JobVal struct {
-	URL     string
-	Pattern string
-	//SM OracleWiter
-}
-
-func (j Job) Scrap() (string, error) {
-	res, err := http.Get(j.URL)
-	if err != nil {
-		return "", err
-	}
-	data, err := j.resolve(res)
-	if err != nil {
-		return "", err
-	}
-	return data, nil
-}
-
-// Not implemented
-// TODO: add resolver
-func (j Job) resolve(resp *http.Response) (string, error) {
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	// TODO: ADD RESOLVER
-	return string(body), nil
-}
 
 // TODO: add ETH CLIENT(Maybe OracleWriter will include it)
 type Worker struct {
@@ -63,12 +24,12 @@ type Worker struct {
 	// GetJobs() wirtes watch response to this channel
 	// Work() read from this channel to deal with jobs
 	WatcherChan chan *Job
-	CloseChan   chan struct{}
+	CloseOnce   *sync.Once
 
 	/*
 		OracleWriter writes job result to Oracle smart contract
+		TODO: add ETH CLIENT to OracleWriter
 	*/
-	// TODO: add ETH CLIENT
 	smartContract.OracleWriter
 }
 
@@ -76,8 +37,8 @@ func NewWoker(id string, prefix string, endpoints []string, ow smartContract.Ora
 	if len(id) != 160 {
 		return nil, fmt.Errorf("%s", "id length != 160")
 	}
-	if len(prefix) >= len(id) {
-		return nil, fmt.Errorf("%s", "prefix length can not be larger than id")
+	if len(prefix) >= 160 || len(prefix) < 1 {
+		return nil, fmt.Errorf("%s", "Illegal prefix")
 	}
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:   endpoints,
@@ -90,6 +51,7 @@ func NewWoker(id string, prefix string, endpoints []string, ow smartContract.Ora
 		ID:           id,
 		GroupPrefix:  prefix,
 		ETCDClient:   cli,
+		CloseOnce:    new(sync.Once),
 		WatcherChan:  make(chan *Job),
 		OracleWriter: ow,
 	}, nil
@@ -104,10 +66,11 @@ func (woker Worker) GetJobs() {
 			switch event.Type {
 			case mvccpb.PUT:
 				modVersion := event.Kv.ModRevision
-				if modVersion == 0 { // this is a delete action, other worker has done the job
+				// this is a delete action, other worker has done the job
+				if modVersion == 0 {
 					continue
 				}
-				cancelFunc, locked, err := woker.acquireLock(event.Kv.Key, 5)
+				cancelFunc, locked, err := woker.acquireLock(string(event.Kv.Key), 5)
 				if !locked || err != nil {
 					continue
 				}
@@ -128,28 +91,62 @@ func (woker Worker) GetJobs() {
 	}
 }
 
-func (woker Worker) acquireLock(key []byte, ttl int) (context.CancelFunc, bool, error) {
+func (woker Worker) acquireLock(key string, ttl int) (context.CancelFunc, bool, error) {
 	resp, err := woker.ETCDClient.Grant(context.Background(), int64(ttl))
 	if err != nil {
 		return nil, false, err
 	}
 	leaseID := resp.ID
-	session, err := concurrency.NewSession(woker.ETCDClient, concurrency.WithLease(leaseID))
-	if err != nil {
-		return nil, false, err
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	defer woker.ETCDClient.Revoke(context.Background(), leaseID)
+	ch, keepErr := woker.ETCDClient.KeepAlive(ctx, leaseID)
+	if keepErr != nil {
+		fmt.Println("keep alive failed, err:", keepErr)
+		return nil, false, keepErr
 	}
-	timeout, cancelFunc := context.WithTimeout(context.Background(), time.Duration(ttl))
-	mutex := concurrency.NewMutex(session, "/lock")
-	err = mutex.Lock(timeout)
+
+	go func(key string) {
+		for {
+			select {
+			case ka := <-ch:
+				fmt.Printf("lease ttl is: %d for key: %s:", ka.TTL, key)
+			case <-ctx.Done():
+				fmt.Printf("Job done for Job ID: %s:", key)
+				return
+			}
+		}
+	}(key)
+
+	txn := woker.ETCDClient.Txn(context.Background())
+	txn.If(clientv3.Compare(clientv3.CreateRevision(key), "=", 0)).
+		Then(clientv3.OpPut("lock/"+key, "JOB", clientv3.WithLease(leaseID)))
+
+	txnResp, err := txn.Commit()
 	if err != nil {
-		defer cancelFunc()
-		return nil, false, err
+		return nil, false, fmt.Errorf("txn failed, err: %s", err)
 	}
-	return cancelFunc, true, nil
+	if !txnResp.Succeeded { // Dose not get the lock
+		return nil, false, fmt.Errorf("lock failed for JObID: %s", key)
+	}
+	return cancel, true, nil
 }
 
-func releaseLock(cancel context.CancelFunc) {
+func (woker Worker) releaseLock(cancel context.CancelFunc, key string) {
 	cancel()
+	txn := woker.ETCDClient.Txn(context.Background())
+	txn.If(clientv3.Compare(clientv3.Value("lock/"+key), "=", "JOB")).
+		Then(clientv3.OpDelete(key), clientv3.OpDelete("lock/"+key))
+
+	txnResp, err := txn.Commit()
+	if err != nil {
+		fmt.Printf("txn failed, err: %s", err)
+	}
+	if !txnResp.Succeeded {
+		fmt.Printf("failed for JObID: %s", key)
+		return
+	}
 }
 
 // create goroutines to deal with jobs
@@ -157,18 +154,19 @@ func (woker Worker) Work() {
 	for {
 		job := <-woker.WatcherChan
 		go func(job *Job) {
-			// release Lock
-			defer releaseLock(job.Cancel)
 			data, err := job.Scrap()
 			if err != nil {
 				return
 			}
+			// release Lock and delete the job
+			defer woker.releaseLock(job.Cancel, job.ID)
 			woker.OracleWriter.WriteData(data)
 		}(job)
 	}
 }
 
-// TODO: use CloseChan to inform other goroutines
 func (woker Worker) Close() {
-	woker.ETCDClient.Close()
+	woker.CloseOnce.Do(func() {
+		woker.ETCDClient.Close()
+	})
 }
