@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	smartContract "oracle/smartContract"
-	"sync"
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
@@ -149,8 +148,8 @@ func (woker Worker) acquireLock(key []byte, ttl int) (context.CancelFunc, bool, 
 	return cancelFunc, true, nil
 }
 
-func releaseLock(locker sync.Locker) {
-	locker.Unlock()
+func releaseLock(cancel context.CancelFunc) {
+	cancel()
 }
 
 // create goroutines to deal with jobs
@@ -159,7 +158,7 @@ func (woker Worker) Work() {
 		job := <-woker.WatcherChan
 		go func(job *Job) {
 			// release Lock
-			defer job.Cancel()
+			defer releaseLock(job.Cancel)
 			data, err := job.Scrap()
 			if err != nil {
 				return
