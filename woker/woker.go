@@ -137,7 +137,7 @@ func (woker Worker) releaseLock(cancel context.CancelFunc, key string) {
 	cancel()
 	txn := woker.ETCDClient.Txn(context.Background())
 	txn.If(clientv3.Compare(clientv3.Value("lock/"+key), "=", "JOB")).
-		Then(clientv3.OpDelete(key), clientv3.OpDelete("lock/"+key))
+		Then(clientv3.OpDelete("lock/" + key))
 
 	txnResp, err := txn.Commit()
 	if err != nil {
@@ -154,12 +154,14 @@ func (woker Worker) Work() {
 	for {
 		job := <-woker.WatcherChan
 		go func(job *Job) {
+			// whether success or not, release the Lock
+			defer woker.releaseLock(job.Cancel, job.ID)
 			data, err := job.Scrap()
 			if err != nil {
 				return
 			}
-			// release Lock and delete the job
-			defer woker.releaseLock(job.Cancel, job.ID)
+			// if success, delete job
+			defer woker.ETCDClient.Delete(context.Background(), job.ID)
 			woker.OracleWriter.WriteData(data)
 		}(job)
 	}
