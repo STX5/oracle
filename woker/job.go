@@ -3,6 +3,7 @@ package woker
 import (
 	"context"
 	"io"
+	"log"
 	"net/http"
 )
 
@@ -14,13 +15,14 @@ type Job struct {
 }
 
 type JobVal struct {
-	URL     string
-	Pattern string
-	//SM OracleWiter related, not sure yet
+	URL     string `json:"url"`
+	Pattern string `json:"pattern"`
+	// SM OracleWiter related, not sure yet
 }
 
 // TODO: add timeout
 func (j Job) Scrap() (string, error) {
+	log.Println("start scraping")
 	res, err := http.Get(j.URL)
 	if err != nil {
 		return "", err

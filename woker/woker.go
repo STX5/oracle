@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
@@ -20,7 +21,7 @@ type Worker struct {
 	GroupPrefix string
 	ID          string
 	ETCDClient  *clientv3.Client
-
+	Logger      *logrus.Logger
 	// GetJobs() wirtes watch response to this channel
 	// Work() read from this channel to deal with jobs
 	WatcherChan chan *Job
@@ -34,12 +35,13 @@ type Worker struct {
 }
 
 func NewWoker(id string, prefix string, endpoints []string, ow smartContract.OracleWriter) (*Worker, error) {
-	if len(id) != 160 {
-		return nil, fmt.Errorf("%s", "id length != 160")
-	}
-	if len(prefix) >= 160 || len(prefix) < 1 {
-		return nil, fmt.Errorf("%s", "Illegal prefix")
-	}
+	// if len(id) != 160 {
+	// 	return nil, fmt.Errorf("%s", "id length != 160")
+	// }
+	// if len(prefix) >= 160 || len(prefix) < 1 {
+	// 	return nil, fmt.Errorf("%s", "Illegal prefix")
+	// }
+	// // need to do more check, eg. prefix can't match with id
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:   endpoints,
 		DialTimeout: 5 * time.Second,
@@ -47,10 +49,14 @@ func NewWoker(id string, prefix string, endpoints []string, ow smartContract.Ora
 	if err != nil {
 		log.Fatal(err)
 	}
+	logger := logrus.New()
+	logger.SetLevel(logrus.DebugLevel)
+	logger.SetFormatter(&logrus.JSONFormatter{})
 	return &Worker{
 		ID:           id,
 		GroupPrefix:  prefix,
 		ETCDClient:   cli,
+		Logger:       logger,
 		CloseOnce:    new(sync.Once),
 		WatcherChan:  make(chan *Job),
 		OracleWriter: ow,
@@ -72,12 +78,19 @@ func (woker Worker) GetJobs() {
 				}
 				cancelFunc, locked, err := woker.acquireLock(string(event.Kv.Key), 5)
 				if !locked || err != nil {
+					woker.Logger.WithFields(logrus.Fields{
+						"JobID":      string(event.Kv.Key),
+						"ErrMessage": err,
+					}).Info("Acquire Lock Failed")
 					continue
 				}
 				var jobVal JobVal
 				err = json.Unmarshal(event.Kv.Value, &jobVal)
 				if err != nil {
-					log.Println("Error unmarshalling JobVal")
+					woker.Logger.WithFields(logrus.Fields{
+						"JobID":      string(event.Kv.Key),
+						"ErrMessage": err,
+					}).Info("Error unmarshalling JobVal")
 				}
 				woker.WatcherChan <- &Job{
 					Cancel: cancelFunc,
@@ -99,11 +112,13 @@ func (woker Worker) acquireLock(key string, ttl int) (context.CancelFunc, bool, 
 	leaseID := resp.ID
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	defer woker.ETCDClient.Revoke(context.Background(), leaseID)
 	ch, keepErr := woker.ETCDClient.KeepAlive(ctx, leaseID)
 	if keepErr != nil {
-		fmt.Println("keep alive failed, err:", keepErr)
+		woker.Logger.WithFields(logrus.Fields{
+			"JobID":      string(key),
+			"ErrMessage": keepErr,
+		}).Warning("Error Keep Alive")
+		cancel()
 		return nil, false, keepErr
 	}
 
@@ -111,24 +126,35 @@ func (woker Worker) acquireLock(key string, ttl int) (context.CancelFunc, bool, 
 		for {
 			select {
 			case ka := <-ch:
-				fmt.Printf("lease ttl is: %d for key: %s:", ka.TTL, key)
+				woker.Logger.WithFields(logrus.Fields{
+					"JobID":        string(key),
+					"KeepAliveTTL": ka.TTL,
+				}).Info("KeepAlive")
 			case <-ctx.Done():
-				fmt.Printf("Job done for Job ID: %s:", key)
+				woker.Logger.WithFields(logrus.Fields{
+					"JobID": string(key),
+				}).Info("Release Lease")
 				return
 			}
 		}
 	}(key)
 
 	txn := woker.ETCDClient.Txn(context.Background())
-	txn.If(clientv3.Compare(clientv3.CreateRevision(key), "=", 0)).
+	txn.If(clientv3.Compare(clientv3.CreateRevision("lock/"+key), "=", 0)).
 		Then(clientv3.OpPut("lock/"+key, "JOB", clientv3.WithLease(leaseID)))
 
 	txnResp, err := txn.Commit()
 	if err != nil {
-		return nil, false, fmt.Errorf("txn failed, err: %s", err)
+		woker.Logger.WithFields(logrus.Fields{
+			"JobID":      string(key),
+			"ErrMessage": err,
+		}).Warning("Error Excuting Acquire Lock TXN")
+		cancel()
+		return nil, false, fmt.Errorf("acquire lock txn failed, err: %s", err)
 	}
 	if !txnResp.Succeeded { // Dose not get the lock
-		return nil, false, fmt.Errorf("lock failed for JObID: %s", key)
+		cancel()
+		return nil, false, fmt.Errorf("didnt get lock for JobID: %s", key)
 	}
 	return cancel, true, nil
 }
@@ -141,25 +167,40 @@ func (woker Worker) releaseLock(cancel context.CancelFunc, key string) {
 
 	txnResp, err := txn.Commit()
 	if err != nil {
-		fmt.Printf("txn failed, err: %s", err)
+		woker.Logger.WithFields(logrus.Fields{
+			"JobID":      string(key),
+			"ErrMessage": err,
+		}).Warning("Error Excuting Release Lock TXN")
 	}
+	// don't need more action, cause called cancel() in the first place
 	if !txnResp.Succeeded {
-		fmt.Printf("failed for JObID: %s", key)
+		woker.Logger.WithFields(logrus.Fields{
+			"JobID": string(key),
+		}).Warning("Failed to Releasing Lock")
 		return
 	}
 }
 
 // create goroutines to deal with jobs
+// TODO: limit goroutine number
 func (woker Worker) Work() {
 	for {
 		job := <-woker.WatcherChan
 		go func(job *Job) {
+			woker.Logger.WithFields(logrus.Fields{
+				"JobID": job.ID,
+			}).Info("Get Job")
 			// whether success or not, release the Lock
 			defer woker.releaseLock(job.Cancel, job.ID)
 			data, err := job.Scrap()
 			if err != nil {
+				woker.Logger.WithFields(logrus.Fields{
+					"JobID":      job.ID,
+					"ErrMessage": err,
+				}).Warning("Error Scraping")
 				return
 			}
+			// time.Sleep(10 * time.Second)
 			// if success, delete job
 			defer woker.ETCDClient.Delete(context.Background(), job.ID)
 			woker.OracleWriter.WriteData(data)
