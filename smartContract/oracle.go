@@ -2,7 +2,7 @@ package smartcontract
 
 import (
 	"fmt"
-	clientv3 "go.etcd.io/etcd/client/v3"
+	"go.etcd.io/etcd/client/v3"
 )
 
 // OracleWriter interface OracleWriter defines the methods to interact with smart contract
