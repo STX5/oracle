@@ -18,6 +18,9 @@ type ETHClient struct {
 var client *ETHClient
 
 // GetEthClient 获取eth客户端对象
+// 在获取eth对象的时候会做如下事情：
+// （1）如果是第一次获取，那么创建eth客户端对象，并注册监听的预言机合约的地址
+// （2）如果不是第一次获取，那么直接返回eth客户端对象
 func GetEthClient(url string) *ETHClient {
 	once.Do(func() {
 		cli, err := ethclient.Dial(url)
@@ -26,15 +29,16 @@ func GetEthClient(url string) *ETHClient {
 		}
 		client = new(ETHClient)
 		client.Client = cli
+		// 在这里注册监听的智能合约的地址
 	})
 	return client
 }
 
 // RegisterEventListener 注册智能合约监听事件
+// address: 智能合约的地址
 func (e *ETHClient) RegisterEventListener(address string) error {
 
 	contractAddress := common.HexToAddress(address)
-	fmt.Println("地址", contractAddress, "\t", address)
 	query := ethereum.FilterQuery{
 		Addresses: []common.Address{contractAddress},
 	}
