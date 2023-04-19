@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	smartContract "oracle/smartContract"
 	"sync"
 	"time"
@@ -17,13 +16,13 @@ import (
 // TODO: add ETH CLIENT(Maybe OracleWriter will include it)
 type Worker struct {
 	// GroupPrefix indecates which group the worker belongs to,
-	// which determines the key range the worker watchs
+	// which determines the key range the worker watches
 	GroupPrefix string
 	ID          string
 	ETCDClient  *clientv3.Client
 	Logger      *logrus.Logger
-	// GetJobs() wirtes watch response to this channel
-	// Work() read from this channel to deal with jobs
+	// GetJobs() wirtes watch response to WatcherChan;
+	// Work() read from WatcherChan to deal with jobs
 	WatcherChan chan *Job
 	CloseOnce   *sync.Once
 
@@ -47,7 +46,7 @@ func NewWoker(id string, prefix string, endpoints []string, ow smartContract.Ora
 		DialTimeout: 5 * time.Second,
 	})
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	logger := logrus.New()
 	logger.SetLevel(logrus.DebugLevel)
@@ -200,7 +199,7 @@ func (woker Worker) Work() {
 				}).Warning("Error Scraping")
 				return
 			}
-			// time.Sleep(10 * time.Second)
+			time.Sleep(6 * time.Second) // this is for testing
 			// if success, delete job
 			defer woker.ETCDClient.Delete(context.Background(), job.ID)
 			woker.OracleWriter.WriteData(data)
