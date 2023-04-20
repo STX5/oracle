@@ -1,10 +1,11 @@
-package woker
+package worker
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	smartContract "oracle/smartContract"
+	"runtime"
 	"sync"
 	"time"
 
@@ -12,6 +13,12 @@ import (
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
+
+var paraIndex int
+
+func init() {
+	paraIndex = runtime.NumCPU()
+}
 
 // TODO: add ETH CLIENT(Maybe OracleWriter will include it)
 type Worker struct {
@@ -33,6 +40,7 @@ type Worker struct {
 	smartContract.OracleWriter
 }
 
+// need to do more check, eg. prefix can't match with id
 func NewWoker(id string, prefix string, endpoints []string, ow smartContract.OracleWriter) (*Worker, error) {
 	// if len(id) != 160 {
 	// 	return nil, fmt.Errorf("%s", "id length != 160")
@@ -40,7 +48,6 @@ func NewWoker(id string, prefix string, endpoints []string, ow smartContract.Ora
 	// if len(prefix) >= 160 || len(prefix) < 1 {
 	// 	return nil, fmt.Errorf("%s", "Illegal prefix")
 	// }
-	// // need to do more check, eg. prefix can't match with id
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:   endpoints,
 		DialTimeout: 5 * time.Second,
@@ -180,12 +187,15 @@ func (woker Worker) releaseLock(cancel context.CancelFunc, key string) {
 	}
 }
 
-// create goroutines to deal with jobs
-// TODO: limit goroutine number
 func (woker Worker) Work() {
+	// use token to limit goroutine number
+	token := make(chan struct{}, paraIndex)
 	for {
 		job := <-woker.WatcherChan
 		go func(job *Job) {
+			defer func() {
+				<-token
+			}()
 			woker.Logger.WithFields(logrus.Fields{
 				"JobID": job.ID,
 			}).Info("Get Job")

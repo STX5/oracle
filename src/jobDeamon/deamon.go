@@ -1,13 +1,20 @@
-package jobdeamon
+package deamon
 
 import (
 	"context"
+	"runtime"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
+
+var paraIndex int
+
+func init() {
+	paraIndex = runtime.NumCPU()
+}
 
 // if a ETCD lock expires and its key
 // still exist, means a worker failed.
@@ -56,11 +63,17 @@ func (jd JobDeamon) WatchLock() {
 	}
 }
 
-// TODO: limit goroutine number
 func (jd JobDeamon) ProtectJob() {
+	// use token to limit goroutine number
+	token := make(chan struct{}, paraIndex)
 	for {
 		event := <-jd.WatcherChan
+		token <- struct{}{}
 		go func(event *clientv3.Event) {
+			defer func() {
+				<-token
+			}()
+
 			jobID := string(event.Kv.Key)
 			jobID = jobID[5:]
 			jd.Logger.WithFields(logrus.Fields{
@@ -80,6 +93,14 @@ func (jd JobDeamon) ProtectJob() {
 				}).Info("Job Successfully Done")
 				return
 			}
+			// a job can be tried for at most 5 times
+			if getResp.Kvs[0].Version >= 5 {
+				jd.Logger.WithFields(logrus.Fields{
+					"JobID": jobID,
+				}).Warn("This is An Impossible Job")
+				return
+			}
+
 			jd.Logger.WithFields(logrus.Fields{
 				"JobID": jobID,
 			}).Info("Get JobID")

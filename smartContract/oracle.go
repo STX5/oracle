@@ -2,7 +2,8 @@ package smartcontract
 
 import (
 	"fmt"
-	"go.etcd.io/etcd/client/v3"
+
+	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
 // OracleWriter interface OracleWriter defines the methods to interact with smart contract
@@ -39,6 +40,7 @@ func GetOracleWriter() OracleWriter {
 	return oracle
 }
 
+// this is only for testing
 type TestWriter struct{}
 
 func (TestWriter) WriteData(data string) (bool, error) {
