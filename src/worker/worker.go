@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	smartContract "oracle/smartContract"
+	"os"
 	"runtime"
 	"sync"
 	"time"
@@ -55,9 +56,15 @@ func NewWoker(id string, prefix string, endpoints []string, ow smartContract.Ora
 	if err != nil {
 		return nil, err
 	}
-	logger := logrus.New()
-	logger.SetLevel(logrus.DebugLevel)
-	logger.SetFormatter(&logrus.JSONFormatter{})
+	logger := &logrus.Logger{
+		Out:   os.Stderr,
+		Level: logrus.DebugLevel,
+		Formatter: &logrus.TextFormatter{
+			TimestampFormat:        "2006-01-02 15:04:05",
+			FullTimestamp:          true,
+			DisableLevelTruncation: true,
+		},
+	}
 	return &Worker{
 		ID:           id,
 		GroupPrefix:  prefix,
@@ -192,6 +199,7 @@ func (woker Worker) Work() {
 	token := make(chan struct{}, paraIndex)
 	for {
 		job := <-woker.WatcherChan
+		token <- struct{}{}
 		go func(job *Job) {
 			defer func() {
 				<-token

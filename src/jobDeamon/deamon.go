@@ -2,6 +2,7 @@ package deamon
 
 import (
 	"context"
+	"os"
 	"runtime"
 	"time"
 
@@ -38,9 +39,15 @@ func NewJobDeamon(endpoints []string) (*JobDeamon, error) {
 	if err != nil {
 		return nil, err
 	}
-	logger := logrus.New()
-	logger.SetLevel(logrus.DebugLevel)
-	logger.SetFormatter(&logrus.JSONFormatter{})
+	logger := &logrus.Logger{
+		Out:   os.Stderr,
+		Level: logrus.DebugLevel,
+		Formatter: &logrus.TextFormatter{
+			TimestampFormat:        "2006-01-02 15:04:05",
+			FullTimestamp:          true,
+			DisableLevelTruncation: true,
+		},
+	}
 	return &JobDeamon{
 		ETCDClient:  cli,
 		Logger:      logger,
