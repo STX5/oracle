@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	smartContract "oracle/smartContract"
+	"oracle/util"
 	"os"
 	"runtime"
 	"sync"
@@ -32,7 +33,9 @@ type Worker struct {
 	// GetJobs() wirtes watch response to WatcherChan;
 	// Work() read from WatcherChan to deal with jobs
 	WatcherChan chan *Job
-	CloseOnce   *sync.Once
+	// write to alterPrefixCh when alter GroupPrefix
+	alterPrefixCh chan struct{}
+	CloseOnce     *sync.Once
 
 	/*
 		OracleWriter writes job result to Oracle smart contract
@@ -43,12 +46,17 @@ type Worker struct {
 
 // need to do more check, eg. prefix can't match with id
 func NewWoker(id string, prefix string, endpoints []string, ow smartContract.OracleWriter) (*Worker, error) {
-	// if len(id) != 160 {
-	// 	return nil, fmt.Errorf("%s", "id length != 160")
-	// }
-	// if len(prefix) >= 160 || len(prefix) < 1 {
-	// 	return nil, fmt.Errorf("%s", "Illegal prefix")
-	// }
+	util.CheckPrefix(prefix, id)
+
+	id, err := util.DecodeHex(id)
+	if err != nil || len(id) != 160 {
+		return nil, err
+	}
+	prefix, err = util.DecodeHex(prefix)
+	if err != nil {
+		return nil, err
+	}
+
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:   endpoints,
 		DialTimeout: 5 * time.Second,
@@ -76,10 +84,13 @@ func NewWoker(id string, prefix string, endpoints []string, ow smartContract.Ora
 	}, nil
 }
 
+// TODO: REFACTOR, there should be a main loop,
+// and GetJob should be controlled by a context
 // GetJobs() wirtes watch result to WatcherChan
-func (woker Worker) GetJobs() {
-	ch := woker.ETCDClient.Watch(context.Background(), woker.GroupPrefix,
+func (woker Worker) GetJobs(ctx context.Context) {
+	ch := woker.ETCDClient.Watch(ctx, woker.GroupPrefix,
 		clientv3.WithPrefix())
+
 	for resp := range ch {
 		for _, event := range resp.Events {
 			switch event.Type {
@@ -115,6 +126,7 @@ func (woker Worker) GetJobs() {
 			}
 		}
 	}
+
 }
 
 func (woker Worker) acquireLock(key string, ttl int) (context.CancelFunc, bool, error) {
