@@ -2,8 +2,10 @@ package deamon
 
 import (
 	"context"
+	"log"
 	"os"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -24,11 +26,14 @@ func init() {
 //
 // JobDeamon should be deployed with every ETCD member node
 type JobDeamon struct {
+	mu         *sync.Mutex
 	ETCDClient *clientv3.Client
 	// WatchLock() wirtes deleteEvent to WatcherChan;
 	// ProtectJob() read from WatcherChan to check job status
-	WatcherChan chan *clientv3.Event
-	Logger      *logrus.Logger
+	WatcherChan      chan *clientv3.Event
+	Logger           *logrus.Logger
+	alterEndpointsCh chan []string
+	CloseOnce        *sync.Once
 }
 
 func NewJobDeamon(endpoints []string) (*JobDeamon, error) {
@@ -49,14 +54,48 @@ func NewJobDeamon(endpoints []string) (*JobDeamon, error) {
 		},
 	}
 	return &JobDeamon{
-		ETCDClient:  cli,
-		Logger:      logger,
-		WatcherChan: make(chan *clientv3.Event),
+		ETCDClient:       cli,
+		Logger:           logger,
+		WatcherChan:      make(chan *clientv3.Event),
+		alterEndpointsCh: make(chan []string),
+		mu:               new(sync.Mutex),
+		CloseOnce:        new(sync.Once),
 	}, nil
 }
 
-func (jd JobDeamon) WatchLock() {
-	ch := jd.ETCDClient.Watch(context.Background(), "lock/",
+func (jd JobDeamon) Run() {
+	ctx, cancel := context.WithCancel(context.Background())
+	go jd.WatchLock(ctx)
+	go jd.ProtectJob(ctx)
+	for newEndPoints := range jd.alterEndpointsCh {
+		jd.mu.Lock()
+		cancel()
+		jd.Logger.WithFields(logrus.Fields{
+			"newEndpoints": newEndPoints,
+		}).Info("Endpoints Changed")
+		jd.Close()
+
+		var err error
+		// TODO: need to check endpoints first
+		jd.ETCDClient, err = clientv3.New(clientv3.Config{
+			Endpoints:   newEndPoints,
+			DialTimeout: 5 * time.Second,
+		})
+		if err != nil {
+			log.Fatal("Bad ETCD Endpoints")
+		}
+		jd.WatcherChan = make(chan *clientv3.Event)
+		jd.CloseOnce = new(sync.Once)
+		ctx, cancel = context.WithCancel(context.Background())
+		go jd.WatchLock(ctx)
+		go jd.ProtectJob(ctx)
+		jd.mu.Unlock()
+	}
+	cancel()
+}
+
+func (jd JobDeamon) WatchLock(ctx context.Context) {
+	ch := jd.ETCDClient.Watch(ctx, "lock/",
 		clientv3.WithPrefix())
 	for resp := range ch {
 		for _, event := range resp.Events {
@@ -70,60 +109,78 @@ func (jd JobDeamon) WatchLock() {
 	}
 }
 
-func (jd JobDeamon) ProtectJob() {
+func (jd JobDeamon) ProtectJob(ctx context.Context) {
 	// use token to limit goroutine number
 	token := make(chan struct{}, paraIndex)
 	for {
-		event := <-jd.WatcherChan
-		token <- struct{}{}
-		go func(event *clientv3.Event) {
-			defer func() {
-				<-token
-			}()
-
-			jobID := string(event.Kv.Key)
-			jobID = jobID[5:]
-			jd.Logger.WithFields(logrus.Fields{
-				"JobID": jobID,
-			}).Info("Detected Lock Delete Event")
-
-			getResp, err := jd.ETCDClient.Get(context.Background(), jobID)
-			if err != nil {
-				jd.Logger.WithFields(logrus.Fields{
-					"JobID":      jobID,
-					"ErrMessage": err,
-				}).Warning("Error Get")
+		select {
+		case <-ctx.Done():
+			return
+		case event, ok := <-jd.WatcherChan:
+			if !ok {
+				return
 			}
-			if len(getResp.Kvs) == 0 { // no need to re-put job
+			token <- struct{}{}
+			go func(event *clientv3.Event) {
+				defer func() {
+					<-token
+				}()
+
+				jobID := string(event.Kv.Key)
+				jobID = jobID[5:]
 				jd.Logger.WithFields(logrus.Fields{
 					"JobID": jobID,
-				}).Info("Job Successfully Done")
-				return
-			}
-			// a job can be tried for at most 5 times
-			if getResp.Kvs[0].Version >= 5 {
+				}).Info("Detected Lock Delete Event")
+
+				getResp, err := jd.ETCDClient.Get(context.Background(), jobID)
+				if err != nil {
+					jd.Logger.WithFields(logrus.Fields{
+						"JobID":      jobID,
+						"ErrMessage": err,
+					}).Warning("Error Get")
+				}
+				if len(getResp.Kvs) == 0 { // no need to re-put job
+					jd.Logger.WithFields(logrus.Fields{
+						"JobID": jobID,
+					}).Info("Job Successfully Done")
+					return
+				}
+				// a job can be tried for at most 5 times
+				if getResp.Kvs[0].Version >= 5 {
+					jd.Logger.WithFields(logrus.Fields{
+						"JobID": jobID,
+					}).Warn("This is An Impossible Job")
+					return
+				}
+
 				jd.Logger.WithFields(logrus.Fields{
 					"JobID": jobID,
-				}).Warn("This is An Impossible Job")
-				return
-			}
+				}).Info("Get JobID")
+				jobVal := string(getResp.Kvs[0].Value)
+				txn := jd.ETCDClient.Txn(context.Background())
+				txn.If(clientv3.Compare(clientv3.Value(jobID), "=", jobVal)).
+					Then(clientv3.OpPut(jobID, string(jobVal)))
 
-			jd.Logger.WithFields(logrus.Fields{
-				"JobID": jobID,
-			}).Info("Get JobID")
-			jobVal := string(getResp.Kvs[0].Value)
-			txn := jd.ETCDClient.Txn(context.Background())
-			txn.If(clientv3.Compare(clientv3.Value(jobID), "=", jobVal)).
-				Then(clientv3.OpPut(jobID, string(jobVal)))
-
-			_, err = txn.Commit()
-			if err != nil {
-				jd.Logger.WithFields(logrus.Fields{
-					"JobID":      jobID,
-					"ErrMessage": err,
-				}).Warning("Error Excuting ProtectJob TXN")
-				return
-			}
-		}(event)
+				_, err = txn.Commit()
+				if err != nil {
+					jd.Logger.WithFields(logrus.Fields{
+						"JobID":      jobID,
+						"ErrMessage": err,
+					}).Warning("Error Excuting ProtectJob TXN")
+					return
+				}
+			}(event)
+		}
 	}
+}
+
+func (jd JobDeamon) AlterEndpoints(newEndpoints []string) {
+	jd.alterEndpointsCh <- newEndpoints
+}
+
+func (jd JobDeamon) Close() {
+	jd.CloseOnce.Do(func() {
+		jd.ETCDClient.Close()
+		close(jd.WatcherChan)
+	})
 }

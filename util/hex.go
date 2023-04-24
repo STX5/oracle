@@ -29,20 +29,12 @@ func DecodeBinary(bID string) (string, error) {
 }
 
 func CheckPrefix(prefix, id string) bool {
-	bPre, err := DecodeHex(prefix)
-	if err != nil {
-		return false
-	}
-	bID, err := DecodeHex(id)
-	if err != nil {
-		return false
-	}
-	pLen, idLen := len(bPre), len(bID)
+	pLen, idLen := len(prefix), len(id)
 	if pLen > idLen {
 		return false
 	}
 	for i := 0; i < pLen; i++ {
-		if bPre[i] != bID[i] {
+		if prefix[i] != id[i] {
 			return false
 		}
 	}

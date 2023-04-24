@@ -47,10 +47,7 @@ type Worker struct {
 	smartContract.OracleWriter
 }
 
-// need to do more check, eg. prefix can't match with id
 func NewWoker(id string, prefix string, endpoints []string, ow smartContract.OracleWriter) (*Worker, error) {
-	util.CheckPrefix(prefix, id)
-
 	id, err := util.DecodeHex(id)
 	if err != nil || len(id) != 160 {
 		return nil, err
@@ -58,6 +55,10 @@ func NewWoker(id string, prefix string, endpoints []string, ow smartContract.Ora
 	prefix, err = util.DecodeHex(prefix)
 	if err != nil {
 		return nil, err
+	}
+	legal := util.CheckPrefix(prefix, id)
+	if !legal {
+		return nil, fmt.Errorf("prefix:%s, and ID:%s ,not match", prefix, id)
 	}
 
 	cli, err := clientv3.New(clientv3.Config{
@@ -143,9 +144,6 @@ func (worker Worker) Run() {
 	}
 }
 
-// TODO: REFACTOR, there should be a main loop,
-// and GetJob should be controlled by a context
-//
 // GetJobs() wirtes watch result to WatcherChan
 func (woker Worker) GetJobs(ctx context.Context) {
 	ch := woker.ETCDClient.Watch(ctx, woker.GroupPrefix,
