@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	smartContract "oracle/smartContract"
 	"oracle/util"
 	"os"
@@ -26,6 +27,7 @@ func init() {
 type Worker struct {
 	// GroupPrefix indecates which group the worker belongs to,
 	// which determines the key range the worker watches
+	mu          *sync.Mutex
 	GroupPrefix string
 	ID          string
 	ETCDClient  *clientv3.Client
@@ -34,8 +36,9 @@ type Worker struct {
 	// Work() read from WatcherChan to deal with jobs
 	WatcherChan chan *Job
 	// write to alterPrefixCh when alter GroupPrefix
-	alterPrefixCh chan struct{}
-	CloseOnce     *sync.Once
+	alterPrefixCh    chan string
+	alterEndpointsCh chan []string
+	CloseOnce        *sync.Once
 
 	/*
 		OracleWriter writes job result to Oracle smart contract
@@ -74,18 +77,75 @@ func NewWoker(id string, prefix string, endpoints []string, ow smartContract.Ora
 		},
 	}
 	return &Worker{
-		ID:           id,
-		GroupPrefix:  prefix,
-		ETCDClient:   cli,
-		Logger:       logger,
-		CloseOnce:    new(sync.Once),
-		WatcherChan:  make(chan *Job),
-		OracleWriter: ow,
+		ID:               id,
+		mu:               new(sync.Mutex),
+		GroupPrefix:      prefix,
+		ETCDClient:       cli,
+		Logger:           logger,
+		CloseOnce:        new(sync.Once),
+		WatcherChan:      make(chan *Job),
+		alterPrefixCh:    make(chan string),
+		alterEndpointsCh: make(chan []string),
+		OracleWriter:     ow,
 	}, nil
+}
+
+func (worker Worker) Run() {
+	ctx, cancel := context.WithCancel(context.Background())
+	go worker.GetJobs(ctx)
+	go worker.Work(ctx)
+	for {
+		select {
+		case newPrefix := <-worker.alterPrefixCh:
+			worker.mu.Lock()
+			oldPrefix := worker.GroupPrefix
+			// no need to alter prefix
+			if oldPrefix == newPrefix {
+				worker.mu.Unlock()
+				continue
+			}
+			worker.GroupPrefix = newPrefix
+			worker.Logger.WithFields(logrus.Fields{
+				"newPrefix": newPrefix,
+				"oldPrefix": oldPrefix,
+			}).Info("Prefix Changed")
+			// call cancel() to stop GetJob(), Work()
+			cancel()
+			ctx, cancel = context.WithCancel(context.Background())
+			go worker.GetJobs(ctx)
+			go worker.Work(ctx)
+			worker.mu.Unlock()
+		case newEndPoints := <-worker.alterEndpointsCh:
+			worker.mu.Lock()
+
+			cancel()
+			worker.Logger.WithFields(logrus.Fields{
+				"newEndpoints": newEndPoints,
+			}).Info("Endpoints Changed")
+			worker.Close()
+
+			var err error
+			// TODO: need to check endpoints first
+			worker.ETCDClient, err = clientv3.New(clientv3.Config{
+				Endpoints:   newEndPoints,
+				DialTimeout: 5 * time.Second,
+			})
+			if err != nil {
+				log.Fatal("Bad ETCD Endpoints")
+			}
+			worker.WatcherChan = make(chan *Job)
+			worker.CloseOnce = new(sync.Once)
+			ctx, cancel = context.WithCancel(context.Background())
+			go worker.GetJobs(ctx)
+			go worker.Work(ctx)
+			worker.mu.Unlock()
+		}
+	}
 }
 
 // TODO: REFACTOR, there should be a main loop,
 // and GetJob should be controlled by a context
+//
 // GetJobs() wirtes watch result to WatcherChan
 func (woker Worker) GetJobs(ctx context.Context) {
 	ch := woker.ETCDClient.Watch(ctx, woker.GroupPrefix,
@@ -126,7 +186,44 @@ func (woker Worker) GetJobs(ctx context.Context) {
 			}
 		}
 	}
+}
 
+func (woker Worker) Work(ctx context.Context) {
+	// use token to limit goroutine number
+	token := make(chan struct{}, paraIndex)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case job, ok := <-woker.WatcherChan:
+			if !ok {
+				return
+			}
+			token <- struct{}{}
+			go func(job *Job) {
+				defer func() {
+					<-token
+				}()
+				woker.Logger.WithFields(logrus.Fields{
+					"JobID": job.ID,
+				}).Info("Get Job")
+				// whether success or not, release the Lock
+				defer woker.releaseLock(job.Cancel, job.ID)
+				data, err := job.Scrap()
+				if err != nil {
+					woker.Logger.WithFields(logrus.Fields{
+						"JobID":      job.ID,
+						"ErrMessage": err,
+					}).Warning("Error Scraping")
+					return
+				}
+				time.Sleep(6 * time.Second) // this is for testing
+				// if success, delete job
+				defer woker.ETCDClient.Delete(context.Background(), job.ID)
+				woker.OracleWriter.WriteData(data)
+			}(job)
+		}
+	}
 }
 
 func (woker Worker) acquireLock(key string, ttl int) (context.CancelFunc, bool, error) {
@@ -206,39 +303,17 @@ func (woker Worker) releaseLock(cancel context.CancelFunc, key string) {
 	}
 }
 
-func (woker Worker) Work() {
-	// use token to limit goroutine number
-	token := make(chan struct{}, paraIndex)
-	for {
-		job := <-woker.WatcherChan
-		token <- struct{}{}
-		go func(job *Job) {
-			defer func() {
-				<-token
-			}()
-			woker.Logger.WithFields(logrus.Fields{
-				"JobID": job.ID,
-			}).Info("Get Job")
-			// whether success or not, release the Lock
-			defer woker.releaseLock(job.Cancel, job.ID)
-			data, err := job.Scrap()
-			if err != nil {
-				woker.Logger.WithFields(logrus.Fields{
-					"JobID":      job.ID,
-					"ErrMessage": err,
-				}).Warning("Error Scraping")
-				return
-			}
-			time.Sleep(6 * time.Second) // this is for testing
-			// if success, delete job
-			defer woker.ETCDClient.Delete(context.Background(), job.ID)
-			woker.OracleWriter.WriteData(data)
-		}(job)
-	}
+func (worker Worker) AlterPrefix(newPrefix string) {
+	worker.alterPrefixCh <- newPrefix
+}
+
+func (worker Worker) AlterEndpoints(newEndpoints []string) {
+	worker.alterEndpointsCh <- newEndpoints
 }
 
 func (woker Worker) Close() {
 	woker.CloseOnce.Do(func() {
 		woker.ETCDClient.Close()
+		close(woker.WatcherChan)
 	})
 }
