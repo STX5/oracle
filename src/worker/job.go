@@ -2,9 +2,11 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"time"
 )
 
 type Job struct {
@@ -21,6 +23,27 @@ type JobVal struct {
 }
 
 // TODO: add timeout
+func timeout() {
+	n := time.Duration(3)
+	ctx, cancel := context.WithTimeout(context.TODO(), time.Second*n)
+	defer cancel()
+	ch := make(chan struct{}, 0)
+	go func() {
+		Scrap()
+		ch <- struct{}{}
+	}()
+	select {
+	case <-ch:
+		fmt.Println("done")
+	case <-ctx.Done():
+		fmt.Println("timeout")
+	}
+}
+
+func Scrap() {
+	panic("unimplemented")
+}
+
 func (j Job) Scrap() (string, error) {
 	log.Println("start scraping")
 	res, err := http.Get(j.URL)
