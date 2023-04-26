@@ -60,7 +60,7 @@ func startHttpServer(port int) {
 	}
 }
 
-type Config struct {
+type WorkerConfig struct {
 	Prefix   string   `json:"prefix"`
 	Endpoint []string `json:"endpoint"`
 }
@@ -71,7 +71,7 @@ func updateConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var config Config
+	var config WorkerConfig
 	err := json.NewDecoder(r.Body).Decode(&config)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -81,7 +81,7 @@ func updateConfig(w http.ResponseWriter, r *http.Request) {
 	woker.AlterPrefix(config.Prefix)
 	woker.AlterEndpoints(config.Endpoint)
 
-	log.Printf("Update config success, now prefix: %s, endpoint: %v", woker.GroupPrefix, woker.ETCDClient.Endpoints())
+	log.Printf("Update config success, now prefix: %s, endpoint: %v", config.Prefix, config.Endpoint)
 
 	w.WriteHeader(http.StatusNoContent)
 }

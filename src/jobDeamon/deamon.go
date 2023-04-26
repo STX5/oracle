@@ -63,7 +63,7 @@ func NewJobDeamon(endpoints []string) (*JobDeamon, error) {
 	}, nil
 }
 
-func (jd JobDeamon) Run() {
+func (jd *JobDeamon) Run() {
 	ctx, cancel := context.WithCancel(context.Background())
 	go jd.WatchLock(ctx)
 	go jd.ProtectJob(ctx)
