@@ -91,7 +91,7 @@ func NewWoker(id string, prefix string, endpoints []string, ow smartContract.Ora
 	}, nil
 }
 
-func (worker Worker) Run() {
+func (worker *Worker) Run() {
 	ctx, cancel := context.WithCancel(context.Background())
 	go worker.GetJobs(ctx)
 	go worker.Work(ctx)

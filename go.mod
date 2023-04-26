@@ -1,6 +1,6 @@
 module oracle
 
-go 1.20
+go 1.19
 
 require go.etcd.io/etcd/client/v3 v3.5.8
 
