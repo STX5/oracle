@@ -51,8 +51,13 @@ func getEthClientInstance(url string, timeout time.Duration) *ethClient {
 	return ethClientInstance
 }
 
+// 写入数据到智能合约
+func (e *ethClient) writeDataToContract(data string) error {
+	return nil
+}
+
 // 注册oracle请求合约的监听器
-func (e *ethClient) registerRequestContractMonitor(addr string,
+func (e *ethClient) registerContractMonitor(addr string,
 	failure func(err error), handleLog func(logData types.Log)) {
 
 	if failure == nil {

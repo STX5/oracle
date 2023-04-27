@@ -32,7 +32,7 @@ func TestRegisterRequestContractMonitor(t *testing.T) {
 		log.Fatal("客户端连接失败")
 	}
 	// 注册监听事件
-	ethClient.registerRequestContractMonitor("0x12dD89a5285Bda38548B3A915757A2DD3CB52992",
+	ethClient.registerContractMonitor("0x12dD89a5285Bda38548B3A915757A2DD3CB52992",
 		func(err error) {
 			fmt.Println("出现了错误", err)
 		}, func(logData types.Log) {
