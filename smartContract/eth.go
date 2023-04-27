@@ -3,20 +3,44 @@ package smartcontract
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"fmt"
 	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"log"
+	"math/big"
 	"time"
 )
 
 // 表示eth客户端结构
 type ethClient struct {
-	client  *ethclient.Client
-	url     string
+	client *ethclient.Client
+	// eth连接的url
+	url string
+	// 连接的超时时间
 	timeout time.Duration
+}
+
+// 定义智能合约invoker对象的接口
+type ethContractInvoker interface {
+	invoke(opts *bind.TransactOpts, toAddress common.Address) error
+	getPrivateKey() string
+	getContractAddr() string
+	getData() string
+}
+
+// 定义eth智能合约监听者接口
+type ethContractMonitor interface {
+	// 当监听到失败的消息的时候，执行该操作
+	handleError(err error)
+	// 当监听到具体的logData的时候，执行该操作
+	handleLogData(logData types.Log)
+	// 得到监听的地址
+	getMonitorAddr() string
 }
 
 // 用于封装监听的事件数据
@@ -52,23 +76,61 @@ func getEthClientInstance(url string, timeout time.Duration) *ethClient {
 }
 
 // 写入数据到智能合约
-func (e *ethClient) writeDataToContract(data string) error {
-	return nil
+func (e *ethClient) writeDataToContract(invoker ethContractInvoker) error {
+	privateKey, err := crypto.HexToECDSA(invoker.getPrivateKey())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// 获得当前私钥对应的公钥
+	publicKey := privateKey.Public()
+	// 获取公钥的ECDSA形式
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		return fmt.Errorf("无法将公钥转换为ECDSA形式")
+	}
+
+	// 获取eth的客户端对象
+	var client = e.client
+	// 当前智能合约的调用地址
+	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
+	nonce, err := client.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// 获得gas费用
+	gasPrice, err := client.SuggestGasPrice(context.Background())
+	if err != nil {
+		return fmt.Errorf("获取gas费用失败")
+	}
+
+	chainID, err := client.ChainID(context.Background())
+	if err != nil {
+		return fmt.Errorf("chainID获取失败")
+	}
+	transactOps, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		return fmt.Errorf("NewKeyedTransactorWithChainID调用失败")
+	}
+	transactOps.Nonce = big.NewInt(int64(nonce))
+	transactOps.Value = big.NewInt(0)     // in wei
+	transactOps.GasLimit = uint64(300000) // in units
+	transactOps.GasPrice = gasPrice
+
+	// 被调用的合约的地址
+	toAddress := common.HexToAddress(invoker.getData())
+
+	// 真实的调用逻辑，因为智能合约调用取决于
+	// 具体的智能合约的abi文件是怎么实现的
+	// 因此这里需要传入对应的abi文件的invoker对象
+	return invoker.invoke(transactOps, toAddress)
 }
 
 // 注册oracle请求合约的监听器
-func (e *ethClient) registerContractMonitor(addr string,
-	failure func(err error), handleLog func(logData types.Log)) {
-
-	if failure == nil {
-		// 默认的错误处理策略
-		failure = func(err error) {
-			fmt.Println("监听Oracle请求合约的过程中发生了错误:", err)
-		}
-	}
-
+func (e *ethClient) registerContractMonitor(monitor ethContractMonitor) {
 	// 将用户传入的hex格式的地址，转换为Address对象
-	contractAddress := common.HexToAddress(addr)
+	contractAddress := common.HexToAddress(monitor.getMonitorAddr())
 	// 创建查询过滤器
 	queryFilter := ethereum.FilterQuery{
 		Addresses: []common.Address{contractAddress},
@@ -80,7 +142,7 @@ func (e *ethClient) registerContractMonitor(addr string,
 	subscription, err := e.client.SubscribeFilterLogs(context.Background(), queryFilter, logChannel)
 	if err != nil {
 		// 如果发生了错误，那么直接返回该错误
-		failure(err)
+		monitor.handleError(err)
 		return
 	}
 
@@ -91,9 +153,9 @@ func (e *ethClient) registerContractMonitor(addr string,
 			select {
 			case err := <-subscription.Err():
 				// 如果失败了，那么调用外界传入的失败处理器
-				failure(err)
+				monitor.handleError(err)
 			case logData := <-logChannel:
-				handleLog(logData)
+				monitor.handleLogData(logData)
 			}
 		}
 	}()

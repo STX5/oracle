@@ -11,6 +11,7 @@ func TestConfigRight(t *testing.T) {
 		SetEthUrl("localhost:8849").
 		SetRequestContractAddr("fdasfdsfds").
 		SetResponseContractAddr("fdasfdsafd").
+		SetPrivateKey("fdasfdsaf").
 		Build()
 	if err != nil {
 		fmt.Println("配置生成错误")

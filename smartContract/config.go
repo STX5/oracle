@@ -17,6 +17,8 @@ type OracleConfig struct {
 	requestContractAddr string
 	// oracle响应合约地址，worker获取数据后写入该地址
 	responseContractAddr string
+	// 写入oracle智能合约的私钥
+	privateKey string
 }
 
 // OracleConfigBuilder 创建OracleConfig对象的建造者
@@ -76,6 +78,14 @@ func (o *OracleConfigBuilder) SetResponseContractAddr(addr string) *OracleConfig
 	return o
 }
 
+func (o *OracleConfigBuilder) SetPrivateKey(privateKey string) *OracleConfigBuilder {
+	if len(privateKey) == 0 {
+		o.err = fmt.Errorf("privateKey不能为空")
+	}
+	o.config.privateKey = privateKey
+	return o
+}
+
 // Build 返回创建好的Oracle配置对象
 func (o *OracleConfigBuilder) Build() (*OracleConfig, error) {
 	return &o.config, o.err
@@ -89,5 +99,6 @@ func (o *OracleConfig) Default() *OracleConfig {
 		connectTimeout:       10,
 		requestContractAddr:  "",
 		responseContractAddr: "",
+		privateKey:           "",
 	}
 }
