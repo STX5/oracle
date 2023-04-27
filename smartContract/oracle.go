@@ -28,7 +28,11 @@ var oracle *Oracle
 var once sync.Once
 
 // GetOracleWriter 获取OracleWriter接口对象
-func GetOracleWriter(config *OracleConfig) OracleWriter {
+func GetOracleWriter(config *OracleConfig) (OracleWriter, error) {
+	if config == nil {
+		return nil, fmt.Errorf("oracle的配置项不能为空")
+	}
+
 	once.Do(func() {
 		// 创建oracle对象
 		oracle = new(Oracle)
@@ -39,7 +43,7 @@ func GetOracleWriter(config *OracleConfig) OracleWriter {
 		oracle.monitorRequestContract()
 	})
 	// 返回oracle对象
-	return oracle
+	return oracle, nil
 }
 
 // WriteData 将数据写入指定的智能合约
@@ -50,6 +54,10 @@ func (o *Oracle) WriteData(data string) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+func (o *Oracle) name() {
+
 }
 
 // 监听智能合约监听事件
@@ -64,16 +72,10 @@ func (o *Oracle) monitorRequestContract() {
 	// 声明处理监听事件数据的函数
 	handleLogData := func(logData types.Log) {
 		// 这里需要对logData进行解析
+		// 首先需要有abi
 	}
 
 	// 注册请求合约的监听事件
 	o.ethCli.registerContractMonitor(o.config.requestContractAddr,
 		handleFailure, handleLogData)
-}
-
-type TestWriter struct{}
-
-func (TestWriter) WriteData(data string) (bool, error) {
-	fmt.Println(data)
-	return true, nil
 }
