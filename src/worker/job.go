@@ -2,10 +2,11 @@ package worker
 
 import (
 	"context"
-	"io"
+	//"io"
 	"log"
 	"net/http"
 	"time"
+	"github.com/PuerkitoBio/goquery"
 )
 
 type Job struct {
@@ -57,10 +58,17 @@ func (j Job) Scrap() (string, error) {
 // TODO: add resolver
 func (j Job) resolve(resp *http.Response) (string, error) {
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
+	//body, err := io.ReadAll(resp.Body)
+	dom, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
 		return "", err
 	}
+	var result string
+	dom.Find(j.Pattern).Each(func(i int, selection *goquery.Selection) {
+		result = selection.Text()
+		
+	})
+	return result, nil
 	// TODO: ADD RESOLVER
-	return string(body), nil
+	//return string(body), nil
 }
