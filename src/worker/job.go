@@ -5,6 +5,7 @@ import (
 	//"io"
 	"log"
 	"net/http"
+	"time"
 	"github.com/PuerkitoBio/goquery"
 )
 
@@ -23,16 +24,34 @@ type JobVal struct {
 
 // TODO: add timeout
 func (j Job) Scrap() (string, error) {
-	log.Println("start scraping")
-	res, err := http.Get(j.URL)
-	if err != nil {
-		return "", err
-	}
-	data, err := j.resolve(res)
-	if err != nil {
-		return "", err
-	}
-	return data, nil
+    log.Println("start scraping")
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cancel()
+
+    ch := make(chan string, 1)
+    errCh := make(chan error, 1)
+    go func() {
+        res, err := http.Get(j.URL)
+        if err != nil {
+            errCh <- err
+            return
+        }
+        data, err := j.resolve(res)
+        if err != nil {
+            errCh <- err
+            return
+        }
+        ch <- data
+    }()
+
+    select {
+    case data := <-ch:
+        return data, nil
+    case err := <-errCh:
+        return "", err
+    case <-ctx.Done():
+        return "", ctx.Err()
+    }
 }
 
 // Not implemented
