@@ -12,16 +12,6 @@ var clientInstance *clientv3.Client
 
 var once sync.Once
 
-func CloseEtcdClient() {
-	if clientInstance == nil {
-		panic("client为空")
-	}
-	err := clientInstance.Close()
-	if err != nil {
-		panic("client关闭失败")
-	}
-}
-
 // GetEtcdClient 根据传入的etcd的地址返回etcd的客户端连接
 // 返回的是客户端的单例
 func GetEtcdClient(endpoints []string) *clientv3.Client {
