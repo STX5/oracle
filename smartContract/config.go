@@ -21,8 +21,10 @@ type OracleConfig struct {
 
 // OracleConfigBuilder 创建OracleConfig对象的建造者
 type OracleConfigBuilder struct {
+	// Oracle的配置项目
 	config OracleConfig
-	err    error
+	// 记录生成配置项过程中发生的错误
+	err error
 }
 
 func GetOracleConfigBuilder() *OracleConfigBuilder {

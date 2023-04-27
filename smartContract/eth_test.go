@@ -16,16 +16,28 @@ func whenFailure(err error) {
 	fmt.Println(err)
 }
 
-func TestGetEthClient(t *testing.T) {
-	ethClient := GetEthClient("ws://192.168.31.229:8546")
+// 测试eth客户端的连接
+func TestGetEthClientConnection(t *testing.T) {
+	ethClient := getEthClientInstance("ws://192.168.31.229:8546", 10)
 	if ethClient == nil {
 		log.Fatal("客户端连接失败")
 	}
-	fmt.Println("客户端连接成功")
-	err := ethClient.RegisterEventListener(
-		"0x8920661F546cd2FABc538432b2f821E69A5558a7")
-	if err != nil {
-		log.Fatal("监听智能合约事件失败", err)
+	fmt.Println("客户端连接成功: ", ethClient)
+}
+
+// 测试请求合约的监听
+func TestRegisterRequestContractMonitor(t *testing.T) {
+	ethClient := getEthClientInstance("ws://192.168.31.229:8546", 10)
+	if ethClient == nil {
+		log.Fatal("客户端连接失败")
 	}
-	fmt.Println("监听智能合约成功")
+	// 注册监听事件
+	ethClient.registerRequestContractMonitor("0x12dD89a5285Bda38548B3A915757A2DD3CB52992",
+		func(err error) {
+			fmt.Println("出现了错误", err)
+		}, func(logData types.Log) {
+			fmt.Println("有数据到来: ", string(logData.Data))
+		})
+	fmt.Println("监听事件注册成功")
+	select {}
 }
