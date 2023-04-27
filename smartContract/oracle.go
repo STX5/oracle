@@ -20,16 +20,29 @@ type Oracle struct {
 	ethClient  *ETHClient
 }
 
+// 用于封装监听的事件数据
+type eventData struct {
+	// worker请求的地址
+	url string
+	// 解析模式
+	pattern string
+	// 当前调用的用户信息
+	user string
+	// 附加的额外信息
+	appending string
+}
+
 // oracle对象
 var oracle Oracle
 
 // GetOracleWriter 获取OracleWriter接口对象
-func GetOracleWriter() OracleWriter {
+func GetOracleWriter(config *OracleConfig) OracleWriter {
 	once.Do(func() {
-		// todo 创建oracle对象，同时初始化该对象的成员
+		// 读取配置信息
+
 		oracle = Oracle{
 			// 初始化etcdClient
-			etcdClient: GetEtcdClient([]string{"192.168.31.229:2379"}),
+			etcdClient: GetEtcdClient(nil),
 			// 初始化eth客户端对象
 			ethClient: GetEthClient("ws://192.168.31.229:8546"),
 		}
