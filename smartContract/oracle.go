@@ -71,6 +71,7 @@ func (o *Oracle) monitorRequestContract() {
 		handleFailure, handleLogData)
 }
 
+// this is only for testing
 type TestWriter struct{}
 
 func (TestWriter) WriteData(data string) (bool, error) {
