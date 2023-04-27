@@ -9,8 +9,8 @@ import (
 	"sync"
 )
 
-// OracleWriter interface OracleWriter defines the methods to interact with smart contract
-// e.g. WriteData() writes job result into oracle contract
+// OracleWriter interface OracleWriter defines the methods to interact with smart abi
+// e.g. WriteData() writes job result into oracle abi
 // there might be more methods to be added
 type OracleWriter interface {
 	WriteData(data string) (bool, error)
