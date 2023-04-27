@@ -106,7 +106,9 @@ func getOracleWriter(config *OracleConfig) (OracleWriter, error) {
 		// 设置oracle依赖的etcdCli对象
 		oracle.etcdCli = getEtcdClientInstance(config.etcdUrls, config.connectTimeout)
 		// 开始监听请求智能合约
-		oracle.ethCli.registerContractMonitor(new(OracleRequestContractMonitor))
+		oracle.ethCli.registerContractMonitor(&OracleRequestContractMonitor{
+			contractAddr: config.requestContractAddr,
+		})
 	})
 	// 返回oracle对象
 	return oracle, nil
@@ -115,7 +117,11 @@ func getOracleWriter(config *OracleConfig) (OracleWriter, error) {
 // WriteData 将数据写入指定的智能合约
 func (o *Oracle) WriteData(data string) (bool, error) {
 	// 将数据写回智能合约
-	err := o.ethCli.writeDataToContract(new(OracleResponseContractInvoker))
+	err := o.ethCli.writeDataToContract(&OracleResponseContractInvoker{
+		data:         data,
+		privateKey:   o.config.privateKey,
+		contractAddr: o.config.responseContractAddr,
+	})
 	if err != nil {
 		return false, err
 	}
