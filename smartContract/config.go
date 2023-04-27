@@ -90,15 +90,3 @@ func (o *OracleConfigBuilder) SetPrivateKey(privateKey string) *OracleConfigBuil
 func (o *OracleConfigBuilder) Build() (*OracleConfig, error) {
 	return &o.config, o.err
 }
-
-// Default 仅在测试的时候使用
-func (o *OracleConfig) Default() *OracleConfig {
-	return &OracleConfig{
-		etcdUrls:             []string{"192.168.31.229:2379"},
-		ethUrl:               "ws://192.168.31.229:8546",
-		connectTimeout:       10,
-		requestContractAddr:  "",
-		responseContractAddr: "",
-		privateKey:           "",
-	}
-}

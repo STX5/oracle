@@ -2,6 +2,7 @@
 package smartcontract
 
 import (
+	"context"
 	"go.etcd.io/etcd/client/v3"
 	"log"
 	"time"
@@ -42,5 +43,10 @@ func getEtcdClientInstance(urls []string, timeout time.Duration) *etcdClient {
 
 // 将新的键值对添加到etcd中
 func (e *etcdClient) put(key string, value string) error {
+	etcdCli := e.client
+	_, err := etcdCli.Put(context.TODO(), key, value)
+	if err != nil {
+		return err
+	}
 	return nil
 }

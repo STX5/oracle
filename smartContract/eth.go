@@ -27,9 +27,9 @@ type ethClient struct {
 
 // 定义智能合约invoker对象的接口
 type ethContractInvoker interface {
-	invoke(opts *bind.TransactOpts, toAddress common.Address) error
+	invoke(opts *bind.TransactOpts) error
 	getPrivateKey() string
-	getContractAddr() string
+	getContractAddr() common.Address
 	getData() string
 }
 
@@ -40,7 +40,7 @@ type ethContractMonitor interface {
 	// 当监听到具体的logData的时候，执行该操作
 	handleLogData(logData types.Log)
 	// 得到监听的地址
-	getMonitorAddr() string
+	getMonitorAddr() common.Address
 }
 
 // 用于封装监听的事件数据
@@ -118,19 +118,16 @@ func (e *ethClient) writeDataToContract(invoker ethContractInvoker) error {
 	transactOps.GasLimit = uint64(300000) // in units
 	transactOps.GasPrice = gasPrice
 
-	// 被调用的合约的地址
-	toAddress := common.HexToAddress(invoker.getData())
-
 	// 真实的调用逻辑，因为智能合约调用取决于
 	// 具体的智能合约的abi文件是怎么实现的
 	// 因此这里需要传入对应的abi文件的invoker对象
-	return invoker.invoke(transactOps, toAddress)
+	return invoker.invoke(transactOps)
 }
 
 // 注册oracle请求合约的监听器
 func (e *ethClient) registerContractMonitor(monitor ethContractMonitor) {
 	// 将用户传入的hex格式的地址，转换为Address对象
-	contractAddress := common.HexToAddress(monitor.getMonitorAddr())
+	contractAddress := monitor.getMonitorAddr()
 	// 创建查询过滤器
 	queryFilter := ethereum.FilterQuery{
 		Addresses: []common.Address{contractAddress},
