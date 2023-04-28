@@ -2,9 +2,12 @@ package deamon
 
 import (
 	"context"
+	"encoding/json"
 	"log"
+	"net/http"
 	"os"
 	"runtime"
+	"strconv"
 	"sync"
 	"time"
 
@@ -63,7 +66,7 @@ func NewJobDeamon(endpoints []string) (*JobDeamon, error) {
 	}, nil
 }
 
-func (jd *JobDeamon) Run() {
+func (jd JobDeamon) Run() {
 	ctx, cancel := context.WithCancel(context.Background())
 	go jd.WatchLock(ctx)
 	go jd.ProtectJob(ctx)
@@ -183,4 +186,48 @@ func (jd JobDeamon) Close() {
 		jd.ETCDClient.Close()
 		close(jd.WatcherChan)
 	})
+}
+
+type JobConfig struct {
+	Endpoint []string `json:"endpoint"`
+}
+
+func (jd JobDeamon) StartHttpServer(port int) {
+	// 更新配置的路由
+	http.HandleFunc("/update", jd.updateConfig)
+
+	// 尝试监听端口
+	for ; port < 65535; port++ {
+		log.Printf("Start http server, port: %d", port)
+		err := http.ListenAndServe(":"+strconv.Itoa(port), nil)
+		if err != nil {
+			log.Printf("Start http server failed, port: %d, err: %v", port, err)
+			continue
+		}
+	}
+}
+
+func (jd JobDeamon) updateConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var config JobConfig
+	err := json.NewDecoder(r.Body).Decode(&config)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	jd.AlterEndpoints(config.Endpoint)
+
+	log.Printf("Update endpoints: %v", config.Endpoint)
+
+	go func() {
+		time.Sleep(1 * time.Second)
+		log.Printf("Now endpoints: %v", jd.ETCDClient.Endpoints())
+	}()
+
+	w.WriteHeader(http.StatusNoContent)
 }

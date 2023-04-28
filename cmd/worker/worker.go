@@ -41,7 +41,9 @@ func main() {
 	}(5 * time.Second)*/
 
 	// 开启http服务
-	go startHttpServer(port)
+
+	go woker.StartHttpServer(port)
+
 	woker.Run()
 }
 
