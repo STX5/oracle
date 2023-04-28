@@ -88,5 +88,6 @@ func (o *OracleConfigBuilder) SetPrivateKey(privateKey string) *OracleConfigBuil
 
 // Build 返回创建好的Oracle配置对象
 func (o *OracleConfigBuilder) Build() (*OracleConfig, error) {
+	logger.Println("当前Oracle配置项为: ", o)
 	return &o.config, o.err
 }

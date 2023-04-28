@@ -11,14 +11,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"log"
 	"math/big"
 	"time"
 )
 
 // 表示eth客户端结构
 type ethClient struct {
-	client *ethclient.Client
+	*ethclient.Client
 	// eth连接的url
 	url string
 	// 连接的超时时间
@@ -63,14 +62,15 @@ func getEthClientInstance(url string, timeout time.Duration) *ethClient {
 	once.Do(func() {
 		cli, err := ethclient.Dial(url)
 		if err != nil {
-			log.Fatal("eth客户端连接失败")
+			logger.Fatal("eth客户端连接失败")
 		}
 		// 创建单例对象
 		ethClientInstance = new(ethClient)
 		// 设置eth单例对象的属性
 		ethClientInstance.url = url
 		ethClientInstance.timeout = timeout
-		ethClientInstance.client = cli
+		ethClientInstance.Client = cli
+		logger.Println("加载eth客户端对象成功")
 	})
 	return ethClientInstance
 }
@@ -79,7 +79,7 @@ func getEthClientInstance(url string, timeout time.Duration) *ethClient {
 func (e *ethClient) writeDataToContract(invoker ethContractInvoker) error {
 	privateKey, err := crypto.HexToECDSA(invoker.getPrivateKey())
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	// 获得当前私钥对应的公钥
@@ -91,21 +91,20 @@ func (e *ethClient) writeDataToContract(invoker ethContractInvoker) error {
 	}
 
 	// 获取eth的客户端对象
-	var client = e.client
 	// 当前智能合约的调用地址
 	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
-	nonce, err := client.PendingNonceAt(context.Background(), fromAddress)
+	nonce, err := e.PendingNonceAt(context.Background(), fromAddress)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	// 获得gas费用
-	gasPrice, err := client.SuggestGasPrice(context.Background())
+	gasPrice, err := e.SuggestGasPrice(context.Background())
 	if err != nil {
 		return fmt.Errorf("获取gas费用失败")
 	}
 
-	chainID, err := client.ChainID(context.Background())
+	chainID, err := e.ChainID(context.Background())
 	if err != nil {
 		return fmt.Errorf("chainID获取失败")
 	}
@@ -118,6 +117,8 @@ func (e *ethClient) writeDataToContract(invoker ethContractInvoker) error {
 	transactOps.GasLimit = uint64(300000) // in units
 	transactOps.GasPrice = gasPrice
 
+	logger.Println("生成TransactOps对象: ", transactOps)
+
 	// 真实的调用逻辑，因为智能合约调用取决于
 	// 具体的智能合约的abi文件是怎么实现的
 	// 因此这里需要传入对应的abi文件的invoker对象
@@ -125,7 +126,7 @@ func (e *ethClient) writeDataToContract(invoker ethContractInvoker) error {
 }
 
 // 注册oracle请求合约的监听器
-func (e *ethClient) registerContractMonitor(monitor ethContractMonitor) {
+func (e *ethClient) registerContractMonitor(monitor ethContractMonitor) error {
 	// 将用户传入的hex格式的地址，转换为Address对象
 	contractAddress := monitor.getMonitorAddr()
 	// 创建查询过滤器
@@ -136,24 +137,27 @@ func (e *ethClient) registerContractMonitor(monitor ethContractMonitor) {
 	// 创建日志通道
 	logChannel := make(chan types.Log)
 	// 订阅智能合约的日志事件
-	subscription, err := e.client.SubscribeFilterLogs(context.Background(), queryFilter, logChannel)
+	subscription, err := e.SubscribeFilterLogs(context.Background(), queryFilter, logChannel)
 	if err != nil {
 		// 如果发生了错误，那么直接返回该错误
-		monitor.handleError(err)
-		return
+		return err
 	}
 
 	// 开启一个协程额外的处理事件到来的逻辑
 	go func() {
 		for {
-			fmt.Println("等待事件触发")
+			logger.Println("等待智能合约事件触发")
 			select {
 			case err := <-subscription.Err():
 				// 如果失败了，那么调用外界传入的失败处理器
+				logger.Println("智能合约事件监听错误")
 				monitor.handleError(err)
 			case logData := <-logChannel:
+				logger.Println("收到一个新的智能合约事件")
 				monitor.handleLogData(logData)
 			}
 		}
 	}()
+
+	return nil
 }

@@ -5,7 +5,9 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/sirupsen/logrus"
 	"log"
+	"os"
 	"sync"
 )
 
@@ -19,9 +21,9 @@ type OracleWriter interface {
 // Oracle 预言机的实现
 type Oracle struct {
 	// etcd客户端
-	etcdCli *etcdClient
-	ethCli  *ethClient
-	config  *OracleConfig
+	*etcdClient
+	*ethClient
+	*OracleConfig
 }
 
 // OracleRequestContractMonitor 默认的Oracle请求智能合约监听器
@@ -50,6 +52,8 @@ var (
 	once sync.Once
 )
 
+var logger *logrus.Logger
+
 // OracleClient 该变量是暴露给外界使用的对象
 // 主要用于向Oracle合约写入数据
 var OracleClient OracleWriter
@@ -57,9 +61,20 @@ var OracleClient OracleWriter
 // 进行初始化
 // 初始化的过程中
 func init() {
+	// 初始化logger对象
+	logger = &logrus.Logger{
+		Out:   os.Stderr,
+		Level: logrus.DebugLevel,
+		Formatter: &logrus.TextFormatter{
+			TimestampFormat:        "2006-01-02 15:04:05",
+			FullTimestamp:          true,
+			DisableLevelTruncation: true,
+		},
+	}
+
 	// 生成Oracle的默认配置
 	config, err := GetOracleConfigBuilder().
-		SetEtcdUrls([]string{}).
+		SetEtcdUrls([]string{"http://192.168.31.223:2379"}).
 		SetEthUrl("ws://192.168.31.229:8546").
 		SetPrivateKey("123").
 		SetConnectTimeout(10).
@@ -93,6 +108,7 @@ func init() {
 // 获取OracleWriter接口对象
 func getOracleWriter(config *OracleConfig) (OracleWriter, error) {
 	if config == nil {
+		logger.Println("Oracle配置项为空")
 		return nil, fmt.Errorf("oracle的配置项不能为空")
 	}
 
@@ -100,15 +116,19 @@ func getOracleWriter(config *OracleConfig) (OracleWriter, error) {
 		// 创建oracle对象
 		oracle = new(Oracle)
 		// 设置oracle的配置项
-		oracle.config = config
+		oracle.OracleConfig = config
 		// 设置oracle依赖的ethCli对象
-		oracle.ethCli = getEthClientInstance(config.ethUrl, config.connectTimeout)
+		oracle.ethClient = getEthClientInstance(config.ethUrl, config.connectTimeout)
 		// 设置oracle依赖的etcdCli对象
-		oracle.etcdCli = getEtcdClientInstance(config.etcdUrls, config.connectTimeout)
+		oracle.etcdClient = getEtcdClientInstance(config.etcdUrls, config.connectTimeout)
 		// 开始监听请求智能合约
-		oracle.ethCli.registerContractMonitor(&OracleRequestContractMonitor{
+		err := oracle.registerContractMonitor(&OracleRequestContractMonitor{
 			contractAddr: config.requestContractAddr,
 		})
+
+		if err != nil {
+			logger.Fatal("创建Oracle对象失败")
+		}
 	})
 	// 返回oracle对象
 	return oracle, nil
@@ -117,10 +137,10 @@ func getOracleWriter(config *OracleConfig) (OracleWriter, error) {
 // WriteData 将数据写入指定的智能合约
 func (o *Oracle) WriteData(data string) (bool, error) {
 	// 将数据写回智能合约
-	err := o.ethCli.writeDataToContract(&OracleResponseContractInvoker{
+	err := o.writeDataToContract(&OracleResponseContractInvoker{
 		data:         data,
-		privateKey:   o.config.privateKey,
-		contractAddr: o.config.responseContractAddr,
+		privateKey:   o.privateKey,
+		contractAddr: o.responseContractAddr,
 	})
 	if err != nil {
 		return false, err
@@ -141,10 +161,9 @@ func (o *OracleRequestContractMonitor) handleLogData(logData types.Log) {
 	// TODO 生成数据的key
 	// TODO 生成数据的value
 	// 获取etcdCli对象
-	etcdCli := oracle.etcdCli
 	key := ""
 	value := ""
-	err := etcdCli.put(key, value)
+	err := oracle.put(key, value)
 	if err != nil {
 		log.Fatal("写入etcd失败")
 	}

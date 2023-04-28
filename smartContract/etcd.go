@@ -4,14 +4,13 @@ package smartcontract
 import (
 	"context"
 	"go.etcd.io/etcd/client/v3"
-	"log"
 	"time"
 )
 
 // 定义etcd的客户端
 type etcdClient struct {
 	// 客户端对象
-	client *clientv3.Client
+	*clientv3.Client
 	// 连接超时时间
 	timeout time.Duration
 	urls    []string
@@ -29,13 +28,14 @@ func getEtcdClientInstance(urls []string, timeout time.Duration) *etcdClient {
 		})
 
 		if err != nil {
-			log.Fatal("etcd客户端连接错误")
+			logger.Fatal("加载etcd客户端对象失败")
 		}
 
 		etcdClientInstance = new(etcdClient)
-		etcdClientInstance.client = cli
+		etcdClientInstance.Client = cli
 		etcdClientInstance.urls = urls
 		etcdClientInstance.timeout = timeout
+		logger.Println("加载etcd客户端对象成功")
 	})
 
 	return etcdClientInstance
@@ -43,8 +43,7 @@ func getEtcdClientInstance(urls []string, timeout time.Duration) *etcdClient {
 
 // 将新的键值对添加到etcd中
 func (e *etcdClient) put(key string, value string) error {
-	etcdCli := e.client
-	_, err := etcdCli.Put(context.TODO(), key, value)
+	_, err := e.Put(context.TODO(), key, value)
 	if err != nil {
 		return err
 	}
