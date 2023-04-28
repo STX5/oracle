@@ -18,3 +18,13 @@ func TestOracleClient(t *testing.T) {
 		fmt.Println("写入失败")
 	}
 }
+
+func TestGetEthClient(t *testing.T) {
+	ethCli := getEthClientInstance("ws://192.168.31.229:8546", 10)
+	fmt.Println(ethCli)
+}
+
+func TestGetEtcdClient(t *testing.T) {
+	ethCli := getEtcdClientInstance([]string{"192.168.31.229:2379"}, 10)
+	fmt.Println(ethCli)
+}

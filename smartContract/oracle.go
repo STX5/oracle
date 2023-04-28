@@ -49,13 +49,13 @@ var (
 	// oracle对象
 	oracle *Oracle
 	// 用于实现单例模式的工具对象
-	once sync.Once
+	oracleOnce sync.Once
 )
 
+// 日志工具
 var logger *logrus.Logger
 
-// OracleClient 该变量是暴露给外界使用的对象
-// 主要用于向Oracle合约写入数据
+// OracleClient 该变量是暴露给外界使用的对象 主要用于向Oracle合约写入数据
 var OracleClient OracleWriter
 
 // 初始化代码
@@ -73,25 +73,23 @@ func init() {
 
 	// 生成Oracle的默认配置
 	config, err := getOracleConfigBuilder().
-		setEtcdUrls([]string{"http://192.168.31.223:2379"}).
+		setEtcdUrls([]string{"192.168.31.229:2379"}).
 		setEthUrl("ws://192.168.31.229:8546").
 		setPrivateKey("123").
 		setConnectTimeout(10).
 		setRequestContractAddr("123").
 		setResponseContractAddr("123").
 		build()
-	// 如果默认配置出错
 	if err != nil {
-		log.Fatal("初始化oracle默认配置失败")
+		logger.Fatal("初始化oracle默认配置失败")
 	}
 	defaultOracleConfig = config
 
-	// 获取OracleWriter对象
+	// 根据默认配置获取OracleWriter对象
 	// 获取OracleWriter对象的时候，就已经默认设置了RequestContract的监听事件
 	writer, err := getOracleWriter(defaultOracleConfig)
-	// 如果获取OracleWriter对象失败
 	if err != nil {
-		log.Fatal("创建OracleWriter失败")
+		logger.Fatal("创建OracleWriter失败")
 	}
 
 	// 初始化OracleClient对象，该对象是整个smartContract包中提供给外界的
@@ -102,11 +100,11 @@ func init() {
 // 获取OracleWriter接口对象
 func getOracleWriter(config *oracleConfig) (OracleWriter, error) {
 	if config == nil {
-		logger.Println("Oracle配置项为空")
 		return nil, fmt.Errorf("oracle的配置项不能为空")
 	}
 
-	once.Do(func() {
+	oracleOnce.Do(func() {
+		logger.Println("创建Oracle对象")
 		// 创建oracle对象
 		oracle = new(Oracle)
 		// 设置oracle的配置项
@@ -116,12 +114,13 @@ func getOracleWriter(config *oracleConfig) (OracleWriter, error) {
 		// 设置oracle依赖的etcdCli对象
 		oracle.etcdClient = getEtcdClientInstance(config.etcdUrls, config.connectTimeout)
 		// 开始监听请求智能合约
+		logger.Println("设置Oracle请求智能合约监听事件")
 		err := oracle.registerContractMonitor(&OracleRequestContractMonitor{
 			contractAddr: config.requestContractAddr,
 		})
 
 		if err != nil {
-			logger.Fatal("创建Oracle对象失败")
+			logger.Fatal("监听请求智能合约失败")
 		}
 	})
 	// 返回oracle对象
@@ -130,6 +129,7 @@ func getOracleWriter(config *oracleConfig) (OracleWriter, error) {
 
 // WriteData 将数据写入指定的智能合约
 func (o *Oracle) WriteData(data string) (bool, error) {
+	logger.Println("向Oracle的ResponseContract写入数据: ", data)
 	// 将数据写回智能合约
 	err := o.writeDataToContract(&OracleResponseContractInvoker{
 		data:         data,

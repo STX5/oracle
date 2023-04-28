@@ -4,6 +4,7 @@ package smartcontract
 import (
 	"context"
 	"go.etcd.io/etcd/client/v3"
+	"sync"
 	"time"
 )
 
@@ -19,9 +20,12 @@ type etcdClient struct {
 // etcd的单例客户端对象
 var etcdClientInstance *etcdClient
 
+// 实现单例的保证
+var etcdOnce sync.Once
+
 // 获取etcd客户端的单例
 func getEtcdClientInstance(urls []string, timeout time.Duration) *etcdClient {
-	once.Do(func() {
+	etcdOnce.Do(func() {
 		cli, err := clientv3.New(clientv3.Config{
 			Endpoints:   urls,
 			DialTimeout: timeout * time.Second,

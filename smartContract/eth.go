@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"math/big"
+	"sync"
 	"time"
 )
 
@@ -57,9 +58,12 @@ type eventData struct {
 // eth客户端的单例对象
 var ethClientInstance *ethClient
 
+// 实现单例的保证
+var ethOnce sync.Once
+
 // 获取eth客户端的单例对象
 func getEthClientInstance(url string, timeout time.Duration) *ethClient {
-	once.Do(func() {
+	ethOnce.Do(func() {
 		cli, err := ethclient.Dial(url)
 		if err != nil {
 			logger.Fatal("eth客户端连接失败")
