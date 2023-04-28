@@ -2,17 +2,22 @@ package smartcontract
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/sirupsen/logrus"
 	"log"
+	"math/big"
+	"oracle/smartContract/contract"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 )
 
-// OracleWriter interface OracleWriter defines the methods to interact with smart abi
-// e.g. WriteData() writes job result into oracle abi
+// OracleWriter interface OracleWriter defines the methods to interact with smart contract
+// e.g. WriteData() writes job result into oracle contract
 // there might be more methods to be added
 type OracleWriter interface {
 	WriteData(data string) (bool, error)
@@ -75,10 +80,10 @@ func init() {
 	config, err := getOracleConfigBuilder().
 		setEtcdUrls([]string{"192.168.31.229:2379"}).
 		setEthUrl("ws://192.168.31.229:8546").
-		setPrivateKey("123").
+		setPrivateKey("9d8d022bc819c303592b7f384377769f9877b46d087c371c35f5e5049c1e28cf").
 		setConnectTimeout(10).
-		setRequestContractAddr("123").
-		setResponseContractAddr("123").
+		setRequestContractAddr("0x06f4f74252bf1E82651Dc8b141b26D443a3c7e11").
+		setResponseContractAddr("0x06f4f74252bf1E82651Dc8b141b26D443a3c7e11").
 		build()
 	if err != nil {
 		logger.Fatal("初始化oracle默认配置失败")
@@ -150,18 +155,22 @@ func (o *OracleRequestContractMonitor) handleError(err error) {
 
 // 当监听时间到来的时候，需要通过该方法，将解析后的logData数据写入到etcd中
 func (o *OracleRequestContractMonitor) handleLogData(logData types.Log) {
-	// TODO 解析logData中的数据
-	// TODO 将解析后的数据写入etcd中
-	// TODO 生成数据的key
-	// TODO 生成数据的value
-	// 获取etcdCli对象
-	key := ""
-	value := ""
-	err := oracle.put(key, value)
+	logger.Println("开始进行事件日志解析")
+	abiJson, err := abi.JSON(strings.NewReader(contract.ContractMetaData.ABI))
+	event := struct {
+		Key   [32]byte
+		Value [32]byte
+	}{}
+	err = abiJson.UnpackIntoInterface(&event, "ItemSet", logData.Data)
 	if err != nil {
-		log.Fatal("写入etcd失败")
+		logger.Fatal("读取abi文件失败")
 	}
-	panic("这里待实现，非常重要的逻辑，监听的智能合约事件被触发后应该做什么")
+	logger.Println("读取事件信息")
+	fmt.Println(event)
+	fmt.Println(string(event.Key[:]))
+	fmt.Println(string(event.Value[:]))
+	logger.Println("读取地址信息")
+	logger.Println(logData.Address)
 }
 
 // 返回当前要监视的智能合约
@@ -171,7 +180,35 @@ func (o *OracleRequestContractMonitor) getMonitorAddr() common.Address {
 
 // 这里面要写调用写入ResponseContract智能合约的逻辑
 func (o *OracleResponseContractInvoker) invoke(opts *bind.TransactOpts) error {
-	panic("这里待实现，非常重要的逻辑，当用户通过OracleClient调用WriteData的时候，怎么将数据写入智能合约")
+	instance, err := contract.NewContract(o.getContractAddr(), oracle.ethClient.Client)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	key := [32]byte{}
+	value := [32]byte{}
+	copy(key[:], "foo")
+	copy(value[:], "bar")
+
+	num, err := strconv.Atoi(o.getData())
+	if err != nil {
+		return err
+	}
+	tx, err := instance.Store(opts, big.NewInt(int64(num)))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("tx sent: %s", tx.Hash().Hex())
+
+	result, err := instance.Retrieve(nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(result)
+
+	return nil
 }
 
 // 返回当前调用者的私钥

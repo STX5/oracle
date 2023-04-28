@@ -8,15 +8,16 @@ import (
 
 // 外界应该这样子使用该客户端
 func TestOracleClient(t *testing.T) {
-	ok, err := OracleClient.WriteData("写入的数据")
+	ok, err := OracleClient.WriteData("1")
 	if err != nil {
-		log.Fatal("写入错误")
+		log.Fatal("写入错误", err)
 	}
 	if ok {
 		fmt.Println("写入成功")
 	} else {
 		fmt.Println("写入失败")
 	}
+	select {}
 }
 
 func TestGetEthClient(t *testing.T) {
