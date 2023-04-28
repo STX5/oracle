@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-// OracleConfig 定义和oracle相关的配置信息
-type OracleConfig struct {
+// oracleConfig 定义和oracle相关的配置信息
+type oracleConfig struct {
 	// 访问etcd的地址
 	etcdUrls []string
 	// 访问eth的地址
@@ -21,20 +21,20 @@ type OracleConfig struct {
 	privateKey string
 }
 
-// OracleConfigBuilder 创建OracleConfig对象的建造者
-type OracleConfigBuilder struct {
+// oracleConfigBuilder 创建OracleConfig对象的建造者
+type oracleConfigBuilder struct {
 	// Oracle的配置项目
-	config OracleConfig
+	config oracleConfig
 	// 记录生成配置项过程中发生的错误
 	err error
 }
 
-func GetOracleConfigBuilder() *OracleConfigBuilder {
-	return &OracleConfigBuilder{}
+func getOracleConfigBuilder() *oracleConfigBuilder {
+	return &oracleConfigBuilder{}
 }
 
-// SetEtcdUrls 设置oracle依赖的etcd的地址
-func (o *OracleConfigBuilder) SetEtcdUrls(urls []string) *OracleConfigBuilder {
+// setEtcdUrls 设置oracle依赖的etcd的地址
+func (o *oracleConfigBuilder) setEtcdUrls(urls []string) *oracleConfigBuilder {
 	if len(urls) == 0 {
 		o.err = fmt.Errorf("etcd的url列表不能为空")
 	}
@@ -42,8 +42,8 @@ func (o *OracleConfigBuilder) SetEtcdUrls(urls []string) *OracleConfigBuilder {
 	return o
 }
 
-// SetEthUrl 设置oracle依赖的eth的地址
-func (o *OracleConfigBuilder) SetEthUrl(url string) *OracleConfigBuilder {
+// setEthUrl 设置oracle依赖的eth的地址
+func (o *oracleConfigBuilder) setEthUrl(url string) *oracleConfigBuilder {
 	if len(url) == 0 {
 		o.err = fmt.Errorf("eth的url不能为空")
 	}
@@ -51,8 +51,8 @@ func (o *OracleConfigBuilder) SetEthUrl(url string) *OracleConfigBuilder {
 	return o
 }
 
-// SetConnectTimeout 设置访问eth和etcd的超时时间
-func (o *OracleConfigBuilder) SetConnectTimeout(timeout time.Duration) *OracleConfigBuilder {
+// setConnectTimeout 设置访问eth和etcd的超时时间
+func (o *oracleConfigBuilder) setConnectTimeout(timeout time.Duration) *oracleConfigBuilder {
 	if timeout <= 0 {
 		o.err = fmt.Errorf("超时时间<=0")
 	}
@@ -60,8 +60,8 @@ func (o *OracleConfigBuilder) SetConnectTimeout(timeout time.Duration) *OracleCo
 	return o
 }
 
-// SetRequestContractAddr 添加oracle的请求的智能合约
-func (o *OracleConfigBuilder) SetRequestContractAddr(addr string) *OracleConfigBuilder {
+// setRequestContractAddr 添加oracle的请求的智能合约
+func (o *oracleConfigBuilder) setRequestContractAddr(addr string) *oracleConfigBuilder {
 	if len(addr) == 0 {
 		o.err = fmt.Errorf("请求合约的地址不能为空")
 	}
@@ -69,8 +69,8 @@ func (o *OracleConfigBuilder) SetRequestContractAddr(addr string) *OracleConfigB
 	return o
 }
 
-// SetResponseContractAddr 添加oracle响应的智能合约
-func (o *OracleConfigBuilder) SetResponseContractAddr(addr string) *OracleConfigBuilder {
+// setResponseContractAddr 添加oracle响应的智能合约
+func (o *oracleConfigBuilder) setResponseContractAddr(addr string) *oracleConfigBuilder {
 	if len(addr) == 0 {
 		o.err = fmt.Errorf("响应合约的地址不能为空")
 	}
@@ -78,7 +78,7 @@ func (o *OracleConfigBuilder) SetResponseContractAddr(addr string) *OracleConfig
 	return o
 }
 
-func (o *OracleConfigBuilder) SetPrivateKey(privateKey string) *OracleConfigBuilder {
+func (o *oracleConfigBuilder) setPrivateKey(privateKey string) *oracleConfigBuilder {
 	if len(privateKey) == 0 {
 		o.err = fmt.Errorf("privateKey不能为空")
 	}
@@ -86,8 +86,8 @@ func (o *OracleConfigBuilder) SetPrivateKey(privateKey string) *OracleConfigBuil
 	return o
 }
 
-// Build 返回创建好的Oracle配置对象
-func (o *OracleConfigBuilder) Build() (*OracleConfig, error) {
+// build 返回创建好的Oracle配置对象
+func (o *oracleConfigBuilder) build() (*oracleConfig, error) {
 	logger.Println("当前Oracle配置项为: ", o)
 	return &o.config, o.err
 }

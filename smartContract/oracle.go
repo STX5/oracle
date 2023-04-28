@@ -23,7 +23,7 @@ type Oracle struct {
 	// etcd客户端
 	*etcdClient
 	*ethClient
-	*OracleConfig
+	*oracleConfig
 }
 
 // OracleRequestContractMonitor 默认的Oracle请求智能合约监听器
@@ -45,7 +45,7 @@ type OracleResponseContractInvoker struct {
 // 定义仅本包内可见的数据
 var (
 	// 默认的Oracle配置
-	defaultOracleConfig *OracleConfig
+	defaultOracleConfig *oracleConfig
 	// oracle对象
 	oracle *Oracle
 	// 用于实现单例模式的工具对象
@@ -58,10 +58,9 @@ var logger *logrus.Logger
 // 主要用于向Oracle合约写入数据
 var OracleClient OracleWriter
 
-// 进行初始化
-// 初始化的过程中
+// 初始化代码
 func init() {
-	// 初始化logger对象
+	// 初始化logger对象，该对象负责整个smartContract包内的日志打印工作
 	logger = &logrus.Logger{
 		Out:   os.Stderr,
 		Level: logrus.DebugLevel,
@@ -73,40 +72,35 @@ func init() {
 	}
 
 	// 生成Oracle的默认配置
-	config, err := GetOracleConfigBuilder().
-		SetEtcdUrls([]string{"http://192.168.31.223:2379"}).
-		SetEthUrl("ws://192.168.31.229:8546").
-		SetPrivateKey("123").
-		SetConnectTimeout(10).
-		SetRequestContractAddr("123").
-		SetResponseContractAddr("123").
-		Build()
-
+	config, err := getOracleConfigBuilder().
+		setEtcdUrls([]string{"http://192.168.31.223:2379"}).
+		setEthUrl("ws://192.168.31.229:8546").
+		setPrivateKey("123").
+		setConnectTimeout(10).
+		setRequestContractAddr("123").
+		setResponseContractAddr("123").
+		build()
 	// 如果默认配置出错
 	if err != nil {
 		log.Fatal("初始化oracle默认配置失败")
 	}
-
-	// 初始化默认配置全局变量
 	defaultOracleConfig = config
 
 	// 获取OracleWriter对象
-	// 获取OracleWriter对象的时候，就已经默认设置了RequestContract的
-	// 监听事件
+	// 获取OracleWriter对象的时候，就已经默认设置了RequestContract的监听事件
 	writer, err := getOracleWriter(defaultOracleConfig)
-
 	// 如果获取OracleWriter对象失败
 	if err != nil {
 		log.Fatal("创建OracleWriter失败")
 	}
 
-	// 初始化OracleClient对象
-	// 该对象最终暴露给外界使用
+	// 初始化OracleClient对象，该对象是整个smartContract包中提供给外界的
+	// 接口对象之一，另外一个是OracleConfig
 	OracleClient = writer
 }
 
 // 获取OracleWriter接口对象
-func getOracleWriter(config *OracleConfig) (OracleWriter, error) {
+func getOracleWriter(config *oracleConfig) (OracleWriter, error) {
 	if config == nil {
 		logger.Println("Oracle配置项为空")
 		return nil, fmt.Errorf("oracle的配置项不能为空")
@@ -116,7 +110,7 @@ func getOracleWriter(config *OracleConfig) (OracleWriter, error) {
 		// 创建oracle对象
 		oracle = new(Oracle)
 		// 设置oracle的配置项
-		oracle.OracleConfig = config
+		oracle.oracleConfig = config
 		// 设置oracle依赖的ethCli对象
 		oracle.ethClient = getEthClientInstance(config.ethUrl, config.connectTimeout)
 		// 设置oracle依赖的etcdCli对象
