@@ -66,7 +66,7 @@ func NewJobDeamon(endpoints []string) (*JobDeamon, error) {
 	}, nil
 }
 
-func (jd JobDeamon) Run() {
+func (jd *JobDeamon) Run() {
 	ctx, cancel := context.WithCancel(context.Background())
 	go jd.WatchLock(ctx)
 	go jd.ProtectJob(ctx)
@@ -192,7 +192,7 @@ type JobConfig struct {
 	Endpoint []string `json:"endpoint"`
 }
 
-func (jd JobDeamon) StartHttpServer(port int) {
+func (jd *JobDeamon) StartHttpServer(port int) {
 	// 更新配置的路由
 	http.HandleFunc("/update", jd.updateConfig)
 
@@ -207,7 +207,7 @@ func (jd JobDeamon) StartHttpServer(port int) {
 	}
 }
 
-func (jd JobDeamon) updateConfig(w http.ResponseWriter, r *http.Request) {
+func (jd *JobDeamon) updateConfig(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -223,11 +223,6 @@ func (jd JobDeamon) updateConfig(w http.ResponseWriter, r *http.Request) {
 	jd.AlterEndpoints(config.Endpoint)
 
 	log.Printf("Update endpoints: %v", config.Endpoint)
-
-	go func() {
-		time.Sleep(1 * time.Second)
-		log.Printf("Now endpoints: %v", jd.ETCDClient.Endpoints())
-	}()
 
 	w.WriteHeader(http.StatusNoContent)
 }

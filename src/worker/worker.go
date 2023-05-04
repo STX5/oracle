@@ -93,7 +93,9 @@ func NewWoker(id string, prefix string, endpoints []string, ow smartContract.Ora
 	}, nil
 }
 
-func (worker Worker) Run() {
+func (worker *Worker) Run() {
+	//log.Printf("Run function worker address:%p", worker)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	go worker.GetJobs(ctx)
 	go worker.Work(ctx)
@@ -318,7 +320,10 @@ func (woker Worker) Close() {
 	})
 }
 
-func (woker Worker) StartHttpServer(port int) {
+func (woker *Worker) StartHttpServer(port int) {
+
+	//log.Printf("Start Server worker address:%p", woker)
+
 	// 更新配置的路由
 	http.HandleFunc("/update", woker.updateConfig)
 
@@ -338,7 +343,9 @@ type WorkerConfig struct {
 	Endpoint []string `json:"endpoint"`
 }
 
-func (woker Worker) updateConfig(w http.ResponseWriter, r *http.Request) {
+func (woker *Worker) updateConfig(w http.ResponseWriter, r *http.Request) {
+	//log.Printf("UpdateConfig worker address:%p", woker)
+
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -355,11 +362,6 @@ func (woker Worker) updateConfig(w http.ResponseWriter, r *http.Request) {
 	woker.AlterEndpoints(config.Endpoint)
 
 	log.Printf("Update config success, now prefix: %s, endpoint: %v", config.Prefix, config.Endpoint)
-
-	go func() {
-		time.Sleep(3 * time.Second)
-		log.Printf("Now prefix: %s, endpoint: %v", woker.GroupPrefix, woker.ETCDClient.Endpoints())
-	}()
 
 	w.WriteHeader(http.StatusNoContent)
 }
