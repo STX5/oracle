@@ -2,40 +2,54 @@
 package smartcontract
 
 import (
+	"context"
 	"go.etcd.io/etcd/client/v3"
 	"sync"
 	"time"
 )
 
-// etcd的单例客户端对象
-var clientInstance *clientv3.Client
-
-var once sync.Once
-
-func CloseEtcdClient() {
-	if clientInstance == nil {
-		panic("client为空")
-	}
-	err := clientInstance.Close()
-	if err != nil {
-		panic("client关闭失败")
-	}
+// 定义etcd的客户端
+type etcdClient struct {
+	// 客户端对象
+	*clientv3.Client
+	// 连接超时时间
+	timeout time.Duration
+	urls    []string
 }
 
-// GetEtcdClient 根据传入的etcd的地址返回etcd的客户端连接
-// 返回的是客户端的单例
-func GetEtcdClient(endpoints []string) *clientv3.Client {
-	once.Do(func() {
+// etcd的单例客户端对象
+var etcdClientInstance *etcdClient
+
+// 实现单例的保证
+var etcdOnce sync.Once
+
+// 获取etcd客户端的单例
+func getEtcdClientInstance(urls []string, timeout time.Duration) *etcdClient {
+	etcdOnce.Do(func() {
 		cli, err := clientv3.New(clientv3.Config{
-			Endpoints:   endpoints,
-			DialTimeout: 5 * time.Second,
+			Endpoints:   urls,
+			DialTimeout: timeout * time.Second,
 		})
 
 		if err != nil {
-			panic("创建etcd客户端连接错误")
+			logger.Fatal("加载etcd客户端对象失败")
 		}
 
-		clientInstance = cli
+		etcdClientInstance = new(etcdClient)
+		etcdClientInstance.Client = cli
+		etcdClientInstance.urls = urls
+		etcdClientInstance.timeout = timeout
+		logger.Println("加载etcd客户端对象成功")
 	})
-	return clientInstance
+
+	return etcdClientInstance
+}
+
+// 将新的键值对添加到etcd中
+func (e *etcdClient) put(key string, value string) error {
+	_, err := e.Put(context.TODO(), key, value)
+	if err != nil {
+		return err
+	}
+	return nil
 }
