@@ -1,6 +1,7 @@
 package smartcontract
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"log"
 	"testing"
@@ -28,4 +29,12 @@ func TestGetEthClient(t *testing.T) {
 func TestGetEtcdClient(t *testing.T) {
 	ethCli := getEtcdClientInstance([]string{"192.168.31.229:2379"}, 10)
 	fmt.Println(ethCli)
+}
+
+func TestHash(t *testing.T) {
+	hash := sha256.New()
+	hash.Write([]byte("123456"))
+	sum := hash.Sum([]byte(""))
+	fmt.Println(sum)
+	fmt.Println(len(sum))
 }

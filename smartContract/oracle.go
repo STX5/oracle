@@ -1,6 +1,7 @@
 package smartcontract
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -171,6 +172,11 @@ func (o *OracleRequestContractMonitor) handleLogData(logData types.Log) {
 	fmt.Println(string(event.Value[:]))
 	logger.Println("读取地址信息")
 	logger.Println(logData.Address)
+	// 获取合约地址
+	hash := sha256.New()
+	hash.Write(logData.Address.Bytes())
+	sum := hash.Sum([]byte(""))
+	fmt.Println(sum)
 }
 
 // 返回当前要监视的智能合约
