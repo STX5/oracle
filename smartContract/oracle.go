@@ -160,6 +160,7 @@ func (o *OracleRequestContractMonitor) getMonitorAddr() common.Address {
 
 // 这里面要写调用写入ResponseContract智能合约的逻辑
 func (o *OracleResponseContractInvoker) invoke(opts *bind.TransactOpts) error {
+	// todo 创建合约实例
 	instance, err := contract.NewContract(o.getContractAddr(), oracle.ethClient.Client)
 	if err != nil {
 		log.Fatal(err)
@@ -174,6 +175,7 @@ func (o *OracleResponseContractInvoker) invoke(opts *bind.TransactOpts) error {
 	if err != nil {
 		return err
 	}
+	// todo 调用合约，调用合约的时候，传入opts参数
 	tx, err := instance.Store(opts, big.NewInt(int64(num)))
 	if err != nil {
 		log.Fatal(err)
