@@ -93,12 +93,11 @@ func NewWoker(id string, prefix string, endpoints []string, ow smartContract.Ora
 	}, nil
 }
 
-func (worker *Worker) Run() {
-	//log.Printf("Run function worker address:%p", worker)
-
+func (worker Worker) Run(port int) {
 	ctx, cancel := context.WithCancel(context.Background())
 	go worker.GetJobs(ctx)
 	go worker.Work(ctx)
+	go StartHttpServer(&worker, port)
 	for {
 		select {
 		case newPrefix := <-worker.alterPrefixCh:
@@ -320,19 +319,43 @@ func (woker Worker) Close() {
 	})
 }
 
-func (woker *Worker) StartHttpServer(port int) {
-
-	//log.Printf("Start Server worker address:%p", woker)
-
+func StartHttpServer(worker *Worker, port int) {
 	// 更新配置的路由
-	http.HandleFunc("/update", woker.updateConfig)
+	http.HandleFunc("/update", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var config WorkerConfig
+		err := json.NewDecoder(r.Body).Decode(&config)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		worker.AlterPrefix(config.Prefix)
+		worker.AlterEndpoints(config.Endpoint)
+
+		/*worker.Logger.WithFields(logrus.Fields{
+			"newPrefix":   config.Prefix,
+			"newEndpoint": config.Endpoint,
+		}).Info("Update config success")*/
+
+		w.WriteHeader(http.StatusNoContent)
+	})
 
 	// 尝试监听端口
 	for ; port < 65535; port++ {
-		log.Printf("Start http server, port: %d", port)
+		worker.Logger.WithFields(logrus.Fields{
+			"port": port,
+		}).Info("Start http server")
 		err := http.ListenAndServe(":"+strconv.Itoa(port), nil)
 		if err != nil {
-			log.Printf("Start http server failed, port: %d, err: %v", port, err)
+			worker.Logger.WithFields(logrus.Fields{
+				"ServerPort": port,
+				"ErrMsg":     err,
+			}).Info("Start http server failed")
 			continue
 		}
 	}
@@ -341,27 +364,4 @@ func (woker *Worker) StartHttpServer(port int) {
 type WorkerConfig struct {
 	Prefix   string   `json:"prefix"`
 	Endpoint []string `json:"endpoint"`
-}
-
-func (woker *Worker) updateConfig(w http.ResponseWriter, r *http.Request) {
-	//log.Printf("UpdateConfig worker address:%p", woker)
-
-	if r.Method != "POST" {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var config WorkerConfig
-	err := json.NewDecoder(r.Body).Decode(&config)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	woker.AlterPrefix(config.Prefix)
-	woker.AlterEndpoints(config.Endpoint)
-
-	log.Printf("Update config success, now prefix: %s, endpoint: %v", config.Prefix, config.Endpoint)
-
-	w.WriteHeader(http.StatusNoContent)
 }

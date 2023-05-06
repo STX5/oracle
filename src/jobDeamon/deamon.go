@@ -66,10 +66,12 @@ func NewJobDeamon(endpoints []string) (*JobDeamon, error) {
 	}, nil
 }
 
-func (jd *JobDeamon) Run() {
+func (jd JobDeamon) Run(port int) {
 	ctx, cancel := context.WithCancel(context.Background())
+
 	go jd.WatchLock(ctx)
 	go jd.ProtectJob(ctx)
+	go StartHttpServer(&jd, port)
 	for newEndPoints := range jd.alterEndpointsCh {
 		jd.mu.Lock()
 		cancel()
@@ -192,37 +194,42 @@ type JobConfig struct {
 	Endpoint []string `json:"endpoint"`
 }
 
-func (jd *JobDeamon) StartHttpServer(port int) {
+func StartHttpServer(jd *JobDeamon, port int) {
 	// 更新配置的路由
-	http.HandleFunc("/update", jd.updateConfig)
+	http.HandleFunc("/update", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var config JobConfig
+		err := json.NewDecoder(r.Body).Decode(&config)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		jd.AlterEndpoints(config.Endpoint)
+
+		/*jd.Logger.WithFields(logrus.Fields{
+			"newEndpoints": config.Endpoint,
+		}).Info("Update endpoints")*/
+
+		w.WriteHeader(http.StatusNoContent)
+	})
 
 	// 尝试监听端口
 	for ; port < 65535; port++ {
-		log.Printf("Start http server, port: %d", port)
+		jd.Logger.WithFields(logrus.Fields{
+			"port": port,
+		}).Info("Start http server")
 		err := http.ListenAndServe(":"+strconv.Itoa(port), nil)
 		if err != nil {
-			log.Printf("Start http server failed, port: %d, err: %v", port, err)
+			jd.Logger.WithFields(logrus.Fields{
+				"ServerPort": port,
+				"ErrMsg":     err,
+			}).Info("Start http server failed")
 			continue
 		}
 	}
-}
-
-func (jd *JobDeamon) updateConfig(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var config JobConfig
-	err := json.NewDecoder(r.Body).Decode(&config)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	jd.AlterEndpoints(config.Endpoint)
-
-	log.Printf("Update endpoints: %v", config.Endpoint)
-
-	w.WriteHeader(http.StatusNoContent)
 }

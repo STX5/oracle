@@ -1,9 +1,6 @@
 package main
 
 import (
-	"encoding/json"
-	"log"
-	"net/http"
 	smartcontract "oracle/smartContract"
 	"oracle/src/worker"
 	"os"
@@ -29,7 +26,7 @@ func main() {
 		port = 8080
 	}
 
-	woker, _ = worker.NewWoker(legalHexID, legalPrefix, endpoints, smartcontract.TestWriter{})
+	woker, _ = worker.NewWoker(legalHexID, legalPrefix, endpoints, &smartcontract.Oracle{})
 	defer woker.Close()
 
 	// 测试修改endpoints
@@ -40,50 +37,5 @@ func main() {
 		woker.AlterPrefix("000")
 	}(5 * time.Second)*/
 
-	// 开启http服务
-
-	go woker.StartHttpServer(port)
-
-	woker.Run()
-}
-
-func startHttpServer(port int) {
-	// 更新配置的路由
-	http.HandleFunc("/update", updateConfig)
-
-	// 尝试监听端口
-	for ; port < 65535; port++ {
-		log.Printf("Start http server, port: %d", port)
-		err := http.ListenAndServe(":"+strconv.Itoa(port), nil)
-		if err != nil {
-			log.Printf("Start http server failed, port: %d, err: %v", port, err)
-			continue
-		}
-	}
-}
-
-type WorkerConfig struct {
-	Prefix   string   `json:"prefix"`
-	Endpoint []string `json:"endpoint"`
-}
-
-func updateConfig(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var config WorkerConfig
-	err := json.NewDecoder(r.Body).Decode(&config)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	woker.AlterPrefix(config.Prefix)
-	woker.AlterEndpoints(config.Endpoint)
-
-	log.Printf("Update config success, now prefix: %s, endpoint: %v", config.Prefix, config.Endpoint)
-
-	w.WriteHeader(http.StatusNoContent)
+	woker.Run(port)
 }

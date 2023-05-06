@@ -1,6 +1,6 @@
 module oracle
 
-go 1.19
+go 1.20
 
 require (
 	github.com/PuerkitoBio/goquery v1.8.1
@@ -28,7 +28,6 @@ require (
 )
 
 require (
-	github.com/PuerkitoBio/goquery v1.8.1
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
