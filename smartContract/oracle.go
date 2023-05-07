@@ -1,6 +1,7 @@
 package smartcontract
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -44,28 +45,17 @@ type OracleResponseContractInvoker struct {
 	privateKey string
 	// 调用的合约的地址
 	contractAddr string
-	data         string
+	// 写入合约的数据
+	data string
 }
 
 // 定义仅本包内可见的数据
 var (
-	// 默认的Oracle配置
-	defaultOracleConfig *oracleConfig
 	// oracle对象
 	oracle *Oracle
 	// 用于实现单例模式的工具对象
 	oracleOnce sync.Once
-)
-
-// 日志工具
-var logger *logrus.Logger
-
-// OracleClient 该变量是暴露给外界使用的对象 主要用于向Oracle合约写入数据
-var OracleClient OracleWriter
-
-// 初始化代码
-func init() {
-	// 初始化logger对象，该对象负责整个smartContract包内的日志打印工作
+	// 日志对象
 	logger = &logrus.Logger{
 		Out:   os.Stderr,
 		Level: logrus.DebugLevel,
@@ -75,61 +65,46 @@ func init() {
 			DisableLevelTruncation: true,
 		},
 	}
+)
 
-	// 生成Oracle的默认配置
-	config, err := getOracleConfigBuilder().
-		setEtcdUrls([]string{"192.168.31.229:2379"}).
-		setEthUrl("ws://192.168.31.229:8546").
-		setPrivateKey("9d8d022bc819c303592b7f384377769f9877b46d087c371c35f5e5049c1e28cf").
-		setConnectTimeout(10).
-		setRequestContractAddr("0x06f4f74252bf1E82651Dc8b141b26D443a3c7e11").
-		setResponseContractAddr("0x06f4f74252bf1E82651Dc8b141b26D443a3c7e11").
-		build()
+// OracleClient 该变量是暴露给外界使用的对象 主要用于向Oracle合约写入数据
+var OracleClient OracleWriter
+
+// 初始化代码
+func init() {
+	// 初始化oracle对象
+	oracle = new(Oracle)
+	err := oracle.initOracle()
 	if err != nil {
-		logger.Fatal("初始化oracle默认配置失败")
+		logger.Fatal("初始化oracle对象失败")
 	}
-	defaultOracleConfig = config
-
-	// 根据默认配置获取OracleWriter对象
-	// 获取OracleWriter对象的时候，就已经默认设置了RequestContract的监听事件
-	writer, err := getOracleWriter(defaultOracleConfig)
-	if err != nil {
-		logger.Fatal("创建OracleWriter失败")
-	}
-
-	// 初始化OracleClient对象，该对象是整个smartContract包中提供给外界的
-	// 接口对象之一，另外一个是OracleConfig
-	OracleClient = writer
+	// 将预言机对象暴露出去
+	OracleClient = oracle
 }
 
-// 获取OracleWriter接口对象
-func getOracleWriter(config *oracleConfig) (OracleWriter, error) {
-	if config == nil {
-		return nil, fmt.Errorf("oracle的配置项不能为空")
-	}
-
+func (o *Oracle) initOracle() error {
 	oracleOnce.Do(func() {
-		logger.Println("创建Oracle对象")
-		// 创建oracle对象
-		oracle = new(Oracle)
-		// 设置oracle的配置项
-		oracle.oracleConfig = config
+		// 加载oracle的配置文件
+		o.oracleConfig = new(oracleConfig)
+		if err := oracle.oracleConfig.loadFromYaml("oracle.yaml"); err != nil {
+			logger.Fatal("加载oracle的配置文件失败", err)
+		}
 		// 设置oracle依赖的ethCli对象
-		oracle.ethClient = getEthClientInstance(config.ethUrl, config.connectTimeout)
+		o.ethClient = getEthClientInstance(o.EthUrl, o.ConnectTimeout)
 		// 设置oracle依赖的etcdCli对象
-		oracle.etcdClient = getEtcdClientInstance(config.etcdUrls, config.connectTimeout)
+		o.etcdClient = getEtcdClientInstance(o.EtcdUrls, o.ConnectTimeout)
 		// 开始监听请求智能合约
 		logger.Println("设置Oracle请求智能合约监听事件")
-		err := oracle.registerContractMonitor(&OracleRequestContractMonitor{
-			contractAddr: config.requestContractAddr,
+		err := o.registerContractMonitor(&OracleRequestContractMonitor{
+			contractAddr: o.RequestContractAddr,
 		})
 
 		if err != nil {
 			logger.Fatal("监听请求智能合约失败")
 		}
+		logger.Println("oracle对象初始化成功: ", o.oracleConfig)
 	})
-	// 返回oracle对象
-	return oracle, nil
+	return nil
 }
 
 // WriteData 将数据写入指定的智能合约
@@ -138,8 +113,8 @@ func (o *Oracle) WriteData(data string) (bool, error) {
 	// 将数据写回智能合约
 	err := o.writeDataToContract(&OracleResponseContractInvoker{
 		data:         data,
-		privateKey:   o.privateKey,
-		contractAddr: o.responseContractAddr,
+		privateKey:   o.PrivateKey,
+		contractAddr: o.ResponseContractAddr,
 	})
 	if err != nil {
 		return false, err
@@ -171,6 +146,11 @@ func (o *OracleRequestContractMonitor) handleLogData(logData types.Log) {
 	fmt.Println(string(event.Value[:]))
 	logger.Println("读取地址信息")
 	logger.Println(logData.Address)
+	// 获取合约地址
+	hash := sha256.New()
+	hash.Write(logData.Address.Bytes())
+	sum := hash.Sum([]byte(""))
+	fmt.Println(sum)
 }
 
 // 返回当前要监视的智能合约
@@ -180,6 +160,7 @@ func (o *OracleRequestContractMonitor) getMonitorAddr() common.Address {
 
 // 这里面要写调用写入ResponseContract智能合约的逻辑
 func (o *OracleResponseContractInvoker) invoke(opts *bind.TransactOpts) error {
+	// todo 创建合约实例
 	instance, err := contract.NewContract(o.getContractAddr(), oracle.ethClient.Client)
 	if err != nil {
 		log.Fatal(err)
@@ -194,6 +175,7 @@ func (o *OracleResponseContractInvoker) invoke(opts *bind.TransactOpts) error {
 	if err != nil {
 		return err
 	}
+	// todo 调用合约，调用合约的时候，传入opts参数
 	tx, err := instance.Store(opts, big.NewInt(int64(num)))
 	if err != nil {
 		log.Fatal(err)
