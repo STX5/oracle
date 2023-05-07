@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	smartContract "oracle/smartContract"
 	"oracle/util"
 	"os"
 	"runtime"
+	"strconv"
 	"sync"
 	"time"
 
@@ -91,10 +93,11 @@ func NewWoker(id string, prefix string, endpoints []string, ow smartContract.Ora
 	}, nil
 }
 
-func (worker Worker) Run() {
+func (worker Worker) Run(port int) {
 	ctx, cancel := context.WithCancel(context.Background())
 	go worker.GetJobs(ctx)
 	go worker.Work(ctx)
+	go StartHttpServer(&worker, port)
 	for {
 		select {
 		case newPrefix := <-worker.alterPrefixCh:
@@ -314,4 +317,51 @@ func (woker Worker) Close() {
 		woker.ETCDClient.Close()
 		close(woker.WatcherChan)
 	})
+}
+
+func StartHttpServer(worker *Worker, port int) {
+	// 更新配置的路由
+	http.HandleFunc("/update", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var config WorkerConfig
+		err := json.NewDecoder(r.Body).Decode(&config)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		worker.AlterPrefix(config.Prefix)
+		worker.AlterEndpoints(config.Endpoint)
+
+		/*worker.Logger.WithFields(logrus.Fields{
+			"newPrefix":   config.Prefix,
+			"newEndpoint": config.Endpoint,
+		}).Info("Update config success")*/
+
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	// 尝试监听端口
+	for ; port < 65535; port++ {
+		worker.Logger.WithFields(logrus.Fields{
+			"port": port,
+		}).Info("Start http server")
+		err := http.ListenAndServe(":"+strconv.Itoa(port), nil)
+		if err != nil {
+			worker.Logger.WithFields(logrus.Fields{
+				"ServerPort": port,
+				"ErrMsg":     err,
+			}).Info("Start http server failed")
+			continue
+		}
+	}
+}
+
+type WorkerConfig struct {
+	Prefix   string   `json:"prefix"`
+	Endpoint []string `json:"endpoint"`
 }
