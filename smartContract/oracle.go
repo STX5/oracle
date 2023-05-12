@@ -137,10 +137,10 @@ func (o *Oracle) WriteData(fromAddr string, data string) (bool, error) {
 
 	_, err = oracleResponseContract.SetValue(transactOpts, fromAddress, data)
 	if err != nil {
-		return true, nil
+		return false, err
 	}
 	logger.Println("写入数据成功")
-	return false, err
+	return true, nil
 }
 
 // 注册oracle请求合约的监听事件
@@ -165,32 +165,36 @@ func (o *Oracle) registerOracleRequestContractMonitor() error {
 		logger.Println("开始进行事件日志解析")
 		abiJson, err := abi.JSON(strings.NewReader(request.RequestMetaData.ABI))
 
-		event := struct {
+		eventInfo := struct {
 			// 表示当前事件的触发人
-			From string `json:"from"`
+			From common.Address `json:"from"`
 			// 当前事件的值
 			Value string `json:"value"`
 		}{}
 
-		err = abiJson.UnpackIntoInterface(&event, "RequestEvent", data.Data)
+		err = abiJson.UnpackIntoInterface(&eventInfo, "RequestEvent", data.Data)
 		if err != nil {
 			logger.Fatal("解析事件数据失败")
 		}
-		logger.Println("sender: ", event.From)
-		logger.Println("taskId: ", event.Value)
+		logger.Println("sender: ", eventInfo.From)
+		logger.Println("taskId: ", eventInfo.Value)
 		logger.Println("BlockNumber: ", data.BlockNumber)
 		// 根据From和BlockNumber计算Hash
 		blockNumber := fmt.Sprintf("%d", data.BlockNumber)
 		// 计算hash
-		hash := crypto.Keccak256Hash([]byte(event.From + blockNumber))
+		hash := crypto.Keccak256Hash([]byte(eventInfo.From.Hex() + blockNumber))
 		// 将该hash值和value写入etcd
-		logger.Printf("将{%s,%s}写入etcd", hash.Hex(), event.Value)
+		logger.Printf("将{%s,%s}写入etcd", hash.Hex(), eventInfo.Value)
 
 		workerData := struct {
 			TaskHash string `json:"taskHash"`
 			TaskFrom string `json:"taskFrom"`
 			TaskInfo string `json:"taskInfo"`
 		}{}
+
+		workerData.TaskHash = hash.Hex()
+		workerData.TaskFrom = eventInfo.From.Hex()
+		workerData.TaskInfo = eventInfo.Value
 
 		bytes, err := json.Marshal(workerData)
 		if err != nil {

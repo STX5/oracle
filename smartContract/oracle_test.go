@@ -1,6 +1,7 @@
 package smartcontract
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"testing"
@@ -9,9 +10,13 @@ import (
 // 测试Oracle的使用
 func TestOracleWriter(t *testing.T) {
 	// 创建oracle对象
+	_ = NewOracle()
+	select {}
+}
+
+func TestWrite(t *testing.T) {
 	oracle := NewOracle()
-	// 调用WriteData接口，向ResponseContract写入数据
-	ok, err := oracle.WriteData("当前任务发起者的eth公钥地址", "Worker根据任务信息获取到的数据")
+	ok, err := oracle.WriteData("0x006ba56143a8f1a5EcB6607a75bf6bc66F345BB0", "lab405_test")
 	if err != nil {
 		log.Fatal("写入错误", err)
 	}
@@ -20,4 +25,13 @@ func TestOracleWriter(t *testing.T) {
 	} else {
 		fmt.Println("写入失败")
 	}
+}
+
+func TestQueryEtcd(t *testing.T) {
+	client := getEtcdClientInstance([]string{"127.0.0.1:2379"}, 100000)
+	response, err := client.Get(context.Background(), "0xf2441c45792b049da8907d5f6a5c94896bcac0b16a48bee4b6ea1b0c338dd309")
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(response)
 }
