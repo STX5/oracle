@@ -16,6 +16,7 @@ func main() {
 	} else if len(os.Args) == 1 {
 		port = 8080
 	}
+
 	jd, _ := jobdeamon.NewJobDeamon(endpoints)
 	defer jd.Close()
 
