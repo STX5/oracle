@@ -1,0 +1,32 @@
+# 测试worker
+POST http://127.0.0.1:8080/update
+Accept: */*
+Host: 127.0.0.1:8080
+Connection: keep-alive
+Content-Type: application/json
+
+{
+  "prefix": "0111110",
+  "endpoint": [
+    "localhost:2379",
+    "localhost:2380"
+  ]
+}
+
+###
+
+# 测试job
+POST http://127.0.0.1:9999/update
+Accept: */*
+Host: 127.0.0.1:8080
+Connection: keep-alive
+Content-Type: application/json
+
+{
+  "endpoint": [
+    "localhost:2379",
+    "localhost:2380"
+  ]
+}
+
+
