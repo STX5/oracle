@@ -1,7 +1,7 @@
 // Code generated - DO NOT EDIT.
 // This file is a generated binding and any manual changes will be lost.
 
-package contract
+package response
 
 import (
 	"errors"
@@ -31,8 +31,8 @@ var (
 
 // ContractMetaData contains all meta data concerning the Contract contract.
 var ContractMetaData = &bind.MetaData{
-	ABI: "[{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes32\",\"name\":\"key\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"bytes32\",\"name\":\"value\",\"type\":\"bytes32\"}],\"name\":\"ItemSet\",\"type\":\"event\"},{\"inputs\":[],\"name\":\"retrieve\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"num\",\"type\":\"uint256\"}],\"name\":\"store\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
-	Bin: "0x608060405234801561001057600080fd5b506101f6806100206000396000f3fe608060405234801561001057600080fd5b50600436106100365760003560e01c80632e64cec11461003b5780636057361d14610059575b600080fd5b610043610075565b60405161005091906100d6565b60405180910390f35b610073600480360381019061006e9190610122565b61007e565b005b60008054905090565b806000819055507fe79e73da417710ae99aa2088575580a60415d359acfad9cdd3382d59c80281d46040516100b29061019b565b60405180910390a150565b6000819050919050565b6100d0816100bd565b82525050565b60006020820190506100eb60008301846100c7565b92915050565b600080fd5b6100ff816100bd565b811461010a57600080fd5b50565b60008135905061011c816100f6565b92915050565b600060208284031215610138576101376100f1565b5b60006101468482850161010d565b91505092915050565b7f746573745f6576656e745f6b6579000000000000000000000000000000000000815250565b7f746573745f6576656e745f76616c756500000000000000000000000000000000815250565b60006040820190506101af6000830161014f565b6101bb60208301610175565b91905056fea26469706673582212206c9a701f4209a114cce05b69167b1a61c702a9ee6e80e3b1f0f9609f3fdd405264736f6c63430008120033",
+	ABI: "[{\"inputs\":[{\"internalType\":\"string\",\"name\":\"taskId\",\"type\":\"string\"}],\"name\":\"read\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":\"string\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":\"string\"}],\"name\":\"taskResultMap\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":\"string\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"taskId\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"taskResult\",\"type\":\"string\"}],\"name\":\"write\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
+	Bin: "0x608060405234801561001057600080fd5b50610885806100206000396000f3fe608060405234801561001057600080fd5b50600436106100415760003560e01c80631e7c019714610046578063616ffe8314610062578063f748780c14610092575b600080fd5b610060600480360381019061005b91906103b2565b6100c2565b005b61007c6004803603810190610077919061042a565b6100f2565b60405161008991906104f2565b60405180910390f35b6100ac60048036038101906100a7919061042a565b6101a2565b6040516100b991906104f2565b60405180910390f35b806000836040516100d39190610550565b908152602001604051809103902090816100ed919061077d565b505050565b60606000826040516101049190610550565b9081526020016040518091039020805461011d90610596565b80601f016020809104026020016040519081016040528092919081815260200182805461014990610596565b80156101965780601f1061016b57610100808354040283529160200191610196565b820191906000526020600020905b81548152906001019060200180831161017957829003601f168201915b50505050509050919050565b60008180516020810182018051848252602083016020850120818352809550505050505060009150905080546101d790610596565b80601f016020809104026020016040519081016040528092919081815260200182805461020390610596565b80156102505780601f1061022557610100808354040283529160200191610250565b820191906000526020600020905b81548152906001019060200180831161023357829003601f168201915b505050505081565b6000604051905090565b600080fd5b600080fd5b600080fd5b600080fd5b6000601f19601f8301169050919050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052604160045260246000fd5b6102bf82610276565b810181811067ffffffffffffffff821117156102de576102dd610287565b5b80604052505050565b60006102f1610258565b90506102fd82826102b6565b919050565b600067ffffffffffffffff82111561031d5761031c610287565b5b61032682610276565b9050602081019050919050565b82818337600083830152505050565b600061035561035084610302565b6102e7565b90508281526020810184848401111561037157610370610271565b5b61037c848285610333565b509392505050565b600082601f8301126103995761039861026c565b5b81356103a9848260208601610342565b91505092915050565b600080604083850312156103c9576103c8610262565b5b600083013567ffffffffffffffff8111156103e7576103e6610267565b5b6103f385828601610384565b925050602083013567ffffffffffffffff81111561041457610413610267565b5b61042085828601610384565b9150509250929050565b6000602082840312156104405761043f610262565b5b600082013567ffffffffffffffff81111561045e5761045d610267565b5b61046a84828501610384565b91505092915050565b600081519050919050565b600082825260208201905092915050565b60005b838110156104ad578082015181840152602081019050610492565b60008484015250505050565b60006104c482610473565b6104ce818561047e565b93506104de81856020860161048f565b6104e781610276565b840191505092915050565b6000602082019050818103600083015261050c81846104b9565b905092915050565b600081905092915050565b600061052a82610473565b6105348185610514565b935061054481856020860161048f565b80840191505092915050565b600061055c828461051f565b915081905092915050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052602260045260246000fd5b600060028204905060018216806105ae57607f821691505b6020821081036105c1576105c0610567565b5b50919050565b60008190508160005260206000209050919050565b60006020601f8301049050919050565b600082821b905092915050565b6000600883026106297fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff826105ec565b61063386836105ec565b95508019841693508086168417925050509392505050565b6000819050919050565b6000819050919050565b600061067a6106756106708461064b565b610655565b61064b565b9050919050565b6000819050919050565b6106948361065f565b6106a86106a082610681565b8484546105f9565b825550505050565b600090565b6106bd6106b0565b6106c881848461068b565b505050565b5b818110156106ec576106e16000826106b5565b6001810190506106ce565b5050565b601f82111561073157610702816105c7565b61070b846105dc565b8101602085101561071a578190505b61072e610726856105dc565b8301826106cd565b50505b505050565b600082821c905092915050565b600061075460001984600802610736565b1980831691505092915050565b600061076d8383610743565b9150826002028217905092915050565b61078682610473565b67ffffffffffffffff81111561079f5761079e610287565b5b6107a98254610596565b6107b48282856106f0565b600060209050601f8311600181146107e757600084156107d5578287015190505b6107df8582610761565b865550610847565b601f1984166107f5866105c7565b60005b8281101561081d578489015182556001820191506020850194506020810190506107f8565b8683101561083a5784890151610836601f891682610743565b8355505b6001600288020188555050505b50505050505056fea2646970667358221220ea5722fd20e0bedaee85ed8a66d624068a7ea611dd6628cbc861f72d580ed10564736f6c63430008120033",
 }
 
 // ContractABI is the input ABI used to generate the binding from.
@@ -202,189 +202,85 @@ func (_Contract *ContractTransactorRaw) Transact(opts *bind.TransactOpts, method
 	return _Contract.Contract.contract.Transact(opts, method, params...)
 }
 
-// Retrieve is a free data retrieval call binding the contract method 0x2e64cec1.
+// Read is a free data retrieval call binding the contract method 0x616ffe83.
 //
-// Solidity: function retrieve() view returns(uint256)
-func (_Contract *ContractCaller) Retrieve(opts *bind.CallOpts) (*big.Int, error) {
+// Solidity: function read(string taskId) view returns(string)
+func (_Contract *ContractCaller) Read(opts *bind.CallOpts, taskId string) (string, error) {
 	var out []interface{}
-	err := _Contract.contract.Call(opts, &out, "retrieve")
+	err := _Contract.contract.Call(opts, &out, "read", taskId)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return *new(string), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := *abi.ConvertType(out[0], new(string)).(*string)
 
 	return out0, err
 
 }
 
-// Retrieve is a free data retrieval call binding the contract method 0x2e64cec1.
+// Read is a free data retrieval call binding the contract method 0x616ffe83.
 //
-// Solidity: function retrieve() view returns(uint256)
-func (_Contract *ContractSession) Retrieve() (*big.Int, error) {
-	return _Contract.Contract.Retrieve(&_Contract.CallOpts)
+// Solidity: function read(string taskId) view returns(string)
+func (_Contract *ContractSession) Read(taskId string) (string, error) {
+	return _Contract.Contract.Read(&_Contract.CallOpts, taskId)
 }
 
-// Retrieve is a free data retrieval call binding the contract method 0x2e64cec1.
+// Read is a free data retrieval call binding the contract method 0x616ffe83.
 //
-// Solidity: function retrieve() view returns(uint256)
-func (_Contract *ContractCallerSession) Retrieve() (*big.Int, error) {
-	return _Contract.Contract.Retrieve(&_Contract.CallOpts)
+// Solidity: function read(string taskId) view returns(string)
+func (_Contract *ContractCallerSession) Read(taskId string) (string, error) {
+	return _Contract.Contract.Read(&_Contract.CallOpts, taskId)
 }
 
-// Store is a paid mutator transaction binding the contract method 0x6057361d.
+// TaskResultMap is a free data retrieval call binding the contract method 0xf748780c.
 //
-// Solidity: function store(uint256 num) returns()
-func (_Contract *ContractTransactor) Store(opts *bind.TransactOpts, num *big.Int) (*types.Transaction, error) {
-	return _Contract.contract.Transact(opts, "store", num)
-}
+// Solidity: function taskResultMap(string ) view returns(string)
+func (_Contract *ContractCaller) TaskResultMap(opts *bind.CallOpts, arg0 string) (string, error) {
+	var out []interface{}
+	err := _Contract.contract.Call(opts, &out, "taskResultMap", arg0)
 
-// Store is a paid mutator transaction binding the contract method 0x6057361d.
-//
-// Solidity: function store(uint256 num) returns()
-func (_Contract *ContractSession) Store(num *big.Int) (*types.Transaction, error) {
-	return _Contract.Contract.Store(&_Contract.TransactOpts, num)
-}
-
-// Store is a paid mutator transaction binding the contract method 0x6057361d.
-//
-// Solidity: function store(uint256 num) returns()
-func (_Contract *ContractTransactorSession) Store(num *big.Int) (*types.Transaction, error) {
-	return _Contract.Contract.Store(&_Contract.TransactOpts, num)
-}
-
-// ContractItemSetIterator is returned from FilterItemSet and is used to iterate over the raw logs and unpacked data for ItemSet events raised by the Contract contract.
-type ContractItemSetIterator struct {
-	Event *ContractItemSet // Event containing the contract specifics and raw log
-
-	contract *bind.BoundContract // Generic contract to use for unpacking event data
-	event    string              // Event name to use for unpacking event data
-
-	logs chan types.Log        // Log channel receiving the found contract events
-	sub  ethereum.Subscription // Subscription for errors, completion and termination
-	done bool                  // Whether the subscription completed delivering logs
-	fail error                 // Occurred error to stop iteration
-}
-
-// Next advances the iterator to the subsequent event, returning whether there
-// are any more events found. In case of a retrieval or parsing error, false is
-// returned and Error() can be queried for the exact failure.
-func (it *ContractItemSetIterator) Next() bool {
-	// If the iterator failed, stop iterating
-	if it.fail != nil {
-		return false
-	}
-	// If the iterator completed, deliver directly whatever's available
-	if it.done {
-		select {
-		case log := <-it.logs:
-			it.Event = new(ContractItemSet)
-			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
-				it.fail = err
-				return false
-			}
-			it.Event.Raw = log
-			return true
-
-		default:
-			return false
-		}
-	}
-	// Iterator still in progress, wait for either a data or an error event
-	select {
-	case log := <-it.logs:
-		it.Event = new(ContractItemSet)
-		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
-			it.fail = err
-			return false
-		}
-		it.Event.Raw = log
-		return true
-
-	case err := <-it.sub.Err():
-		it.done = true
-		it.fail = err
-		return it.Next()
-	}
-}
-
-// Error returns any retrieval or parsing error occurred during filtering.
-func (it *ContractItemSetIterator) Error() error {
-	return it.fail
-}
-
-// Close terminates the iteration process, releasing any pending underlying
-// resources.
-func (it *ContractItemSetIterator) Close() error {
-	it.sub.Unsubscribe()
-	return nil
-}
-
-// ContractItemSet represents a ItemSet event raised by the Contract contract.
-type ContractItemSet struct {
-	Key   [32]byte
-	Value [32]byte
-	Raw   types.Log // Blockchain specific contextual infos
-}
-
-// FilterItemSet is a free log retrieval operation binding the contract event 0xe79e73da417710ae99aa2088575580a60415d359acfad9cdd3382d59c80281d4.
-//
-// Solidity: event ItemSet(bytes32 key, bytes32 value)
-func (_Contract *ContractFilterer) FilterItemSet(opts *bind.FilterOpts) (*ContractItemSetIterator, error) {
-
-	logs, sub, err := _Contract.contract.FilterLogs(opts, "ItemSet")
 	if err != nil {
-		return nil, err
+		return *new(string), err
 	}
-	return &ContractItemSetIterator{contract: _Contract.contract, event: "ItemSet", logs: logs, sub: sub}, nil
+
+	out0 := *abi.ConvertType(out[0], new(string)).(*string)
+
+	return out0, err
+
 }
 
-// WatchItemSet is a free log subscription operation binding the contract event 0xe79e73da417710ae99aa2088575580a60415d359acfad9cdd3382d59c80281d4.
+// TaskResultMap is a free data retrieval call binding the contract method 0xf748780c.
 //
-// Solidity: event ItemSet(bytes32 key, bytes32 value)
-func (_Contract *ContractFilterer) WatchItemSet(opts *bind.WatchOpts, sink chan<- *ContractItemSet) (event.Subscription, error) {
-
-	logs, sub, err := _Contract.contract.WatchLogs(opts, "ItemSet")
-	if err != nil {
-		return nil, err
-	}
-	return event.NewSubscription(func(quit <-chan struct{}) error {
-		defer sub.Unsubscribe()
-		for {
-			select {
-			case log := <-logs:
-				// New log arrived, parse the event and forward to the user
-				event := new(ContractItemSet)
-				if err := _Contract.contract.UnpackLog(event, "ItemSet", log); err != nil {
-					return err
-				}
-				event.Raw = log
-
-				select {
-				case sink <- event:
-				case err := <-sub.Err():
-					return err
-				case <-quit:
-					return nil
-				}
-			case err := <-sub.Err():
-				return err
-			case <-quit:
-				return nil
-			}
-		}
-	}), nil
+// Solidity: function taskResultMap(string ) view returns(string)
+func (_Contract *ContractSession) TaskResultMap(arg0 string) (string, error) {
+	return _Contract.Contract.TaskResultMap(&_Contract.CallOpts, arg0)
 }
 
-// ParseItemSet is a log parse operation binding the contract event 0xe79e73da417710ae99aa2088575580a60415d359acfad9cdd3382d59c80281d4.
+// TaskResultMap is a free data retrieval call binding the contract method 0xf748780c.
 //
-// Solidity: event ItemSet(bytes32 key, bytes32 value)
-func (_Contract *ContractFilterer) ParseItemSet(log types.Log) (*ContractItemSet, error) {
-	event := new(ContractItemSet)
-	if err := _Contract.contract.UnpackLog(event, "ItemSet", log); err != nil {
-		return nil, err
-	}
-	event.Raw = log
-	return event, nil
+// Solidity: function taskResultMap(string ) view returns(string)
+func (_Contract *ContractCallerSession) TaskResultMap(arg0 string) (string, error) {
+	return _Contract.Contract.TaskResultMap(&_Contract.CallOpts, arg0)
+}
+
+// Write is a paid mutator transaction binding the contract method 0x1e7c0197.
+//
+// Solidity: function write(string taskId, string taskResult) returns()
+func (_Contract *ContractTransactor) Write(opts *bind.TransactOpts, taskId string, taskResult string) (*types.Transaction, error) {
+	return _Contract.contract.Transact(opts, "write", taskId, taskResult)
+}
+
+// Write is a paid mutator transaction binding the contract method 0x1e7c0197.
+//
+// Solidity: function write(string taskId, string taskResult) returns()
+func (_Contract *ContractSession) Write(taskId string, taskResult string) (*types.Transaction, error) {
+	return _Contract.Contract.Write(&_Contract.TransactOpts, taskId, taskResult)
+}
+
+// Write is a paid mutator transaction binding the contract method 0x1e7c0197.
+//
+// Solidity: function write(string taskId, string taskResult) returns()
+func (_Contract *ContractTransactorSession) Write(taskId string, taskResult string) (*types.Transaction, error) {
+	return _Contract.Contract.Write(&_Contract.TransactOpts, taskId, taskResult)
 }

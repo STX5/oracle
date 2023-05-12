@@ -1,1 +1,2 @@
-abigen --bin=Storage.bin --abi=Storage.abi --pkg=contract --out=Storage.go
+abigen --bin=OracleRequestContract.bin --abi=OracleRequestContract.abi --pkg=contract --out=OracleRequestContract.go
+abigen --bin=OracleResponseContract.bin --abi=OracleResponseContract.abi --pkg=contract --out=OracleResponseContract.go
