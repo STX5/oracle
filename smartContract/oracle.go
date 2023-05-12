@@ -25,14 +25,6 @@ type OracleWriter interface {
 	WriteData(data string) (bool, error)
 }
 
-type TestWriter struct {
-}
-
-func (t TestWriter) WriteData(data string) (bool, error) {
-	fmt.Println(data)
-	return true, nil
-}
-
 // Oracle 预言机的实现
 type Oracle struct {
 	// etcd客户端
@@ -80,16 +72,16 @@ var (
 var OracleClient OracleWriter
 
 // 初始化代码
-func init() {
-	// 初始化oracle对象
-	oracle = new(Oracle)
-	err := oracle.initOracle()
-	if err != nil {
-		logger.Fatal("初始化oracle对象失败")
-	}
-	// 将预言机对象暴露出去
-	OracleClient = oracle
-}
+// func init() {
+// 	// 初始化oracle对象
+// 	oracle = new(Oracle)
+// 	err := oracle.initOracle()
+// 	if err != nil {
+// 		logger.Fatal("初始化oracle对象失败")
+// 	}
+// 	// 将预言机对象暴露出去
+// 	OracleClient = oracle
+// }
 
 func (o *Oracle) initOracle() error {
 	oracleOnce.Do(func() {
