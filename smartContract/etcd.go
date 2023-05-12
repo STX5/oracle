@@ -39,7 +39,7 @@ func getEtcdClientInstance(urls []string, timeout time.Duration) *etcdClient {
 		etcdClientInstance.Client = cli
 		etcdClientInstance.urls = urls
 		etcdClientInstance.timeout = timeout
-		logger.Println("加载etcd客户端对象成功")
+		logger.Println("加载etcdClient对象成功")
 	})
 
 	return etcdClientInstance
