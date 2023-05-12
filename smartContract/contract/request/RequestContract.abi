@@ -1,18 +1,17 @@
 [
 	{
+		"inputs": [],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
 		"anonymous": false,
 		"inputs": [
 			{
 				"indexed": false,
 				"internalType": "address",
-				"name": "sender",
+				"name": "from",
 				"type": "address"
-			},
-			{
-				"indexed": false,
-				"internalType": "string",
-				"name": "taskId",
-				"type": "string"
 			},
 			{
 				"indexed": false,
@@ -21,19 +20,19 @@
 				"type": "string"
 			}
 		],
-		"name": "SentEvent",
+		"name": "RequestEvent",
 		"type": "event"
 	},
 	{
 		"inputs": [
 			{
 				"internalType": "string",
-				"name": "taskId",
+				"name": "url",
 				"type": "string"
 			},
 			{
 				"internalType": "string",
-				"name": "value",
+				"name": "pattern",
 				"type": "string"
 			}
 		],
