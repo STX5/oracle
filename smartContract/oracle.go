@@ -92,9 +92,9 @@ func NewOracle() OracleWriter {
 }
 
 // WriteData 将数据写入指定的智能合约
-func (o *Oracle) WriteData(fromAddr string, data string) (bool, error) {
+func (o *Oracle) WriteData(to string, data string) (bool, error) {
 	logger.Println("向Oracle的ResponseContract写入数据: ", data)
-	// 获取私钥
+	// 获取私钥，该私钥是oracle的私钥
 	privateKey, err := crypto.HexToECDSA(o.PrivateKey)
 	if err != nil {
 		return false, err
@@ -141,7 +141,7 @@ func (o *Oracle) WriteData(fromAddr string, data string) (bool, error) {
 		log.Fatal(err)
 	}
 
-	_, err = oracleResponseContract.SetValue(transactOpts, fromAddress, data)
+	_, err = oracleResponseContract.SetValue(transactOpts, common.HexToAddress(to), data)
 	if err != nil {
 		return false, err
 	}
