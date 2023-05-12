@@ -25,7 +25,13 @@ import (
 // e.g. WriteData() writes job result into oracle contract
 // there might be more methods to be added
 type OracleWriter interface {
-	WriteData(address string, data string) (bool, error)
+	// WriteData oracle被智能合约事件触发后，会向etcd中写入如下格式的数据：
+	// {taskHash: xxx, taskFrom: xxx, taskInfo: xxx}
+	// taskHash: 该值是oracle根据事件数据计算出来的etcd的任务key，这里选择将其作为值的一部分重复写入，方便worker需要的时候
+	// 			 取用
+	// taskFrom: 该值是当前任务发起人的eth账户公钥，后续worker根据任务信息取完数据后，该值需要被worker传回，即WriteData的to参数
+	// taskInfo: 该值是任务的描述，其形式为{url:xxx, pattern:xxx}
+	WriteData(to string, data string) (bool, error)
 }
 
 // Oracle 预言机的实现
@@ -86,9 +92,9 @@ func NewOracle() OracleWriter {
 }
 
 // WriteData 将数据写入指定的智能合约
-func (o *Oracle) WriteData(fromAddr string, data string) (bool, error) {
+func (o *Oracle) WriteData(to string, data string) (bool, error) {
 	logger.Println("向Oracle的ResponseContract写入数据: ", data)
-	// 获取私钥
+	// 获取私钥，该私钥是oracle的私钥
 	privateKey, err := crypto.HexToECDSA(o.PrivateKey)
 	if err != nil {
 		return false, err
@@ -135,12 +141,12 @@ func (o *Oracle) WriteData(fromAddr string, data string) (bool, error) {
 		log.Fatal(err)
 	}
 
-	_, err = oracleResponseContract.SetValue(transactOpts, fromAddress, data)
+	_, err = oracleResponseContract.SetValue(transactOpts, common.HexToAddress(to), data)
 	if err != nil {
-		return true, nil
+		return false, err
 	}
 	logger.Println("写入数据成功")
-	return false, err
+	return true, nil
 }
 
 // 注册oracle请求合约的监听事件
@@ -165,32 +171,36 @@ func (o *Oracle) registerOracleRequestContractMonitor() error {
 		logger.Println("开始进行事件日志解析")
 		abiJson, err := abi.JSON(strings.NewReader(request.RequestMetaData.ABI))
 
-		event := struct {
+		eventInfo := struct {
 			// 表示当前事件的触发人
-			From string `json:"from"`
+			From common.Address `json:"from"`
 			// 当前事件的值
 			Value string `json:"value"`
 		}{}
 
-		err = abiJson.UnpackIntoInterface(&event, "RequestEvent", data.Data)
+		err = abiJson.UnpackIntoInterface(&eventInfo, "RequestEvent", data.Data)
 		if err != nil {
 			logger.Fatal("解析事件数据失败")
 		}
-		logger.Println("sender: ", event.From)
-		logger.Println("taskId: ", event.Value)
+		logger.Println("sender: ", eventInfo.From)
+		logger.Println("taskId: ", eventInfo.Value)
 		logger.Println("BlockNumber: ", data.BlockNumber)
 		// 根据From和BlockNumber计算Hash
 		blockNumber := fmt.Sprintf("%d", data.BlockNumber)
 		// 计算hash
-		hash := crypto.Keccak256Hash([]byte(event.From + blockNumber))
+		hash := crypto.Keccak256Hash([]byte(eventInfo.From.Hex() + blockNumber))
 		// 将该hash值和value写入etcd
-		logger.Printf("将{%s,%s}写入etcd", hash.Hex(), event.Value)
+		logger.Printf("将{%s,%s}写入etcd", hash.Hex(), eventInfo.Value)
 
 		workerData := struct {
 			TaskHash string `json:"taskHash"`
 			TaskFrom string `json:"taskFrom"`
 			TaskInfo string `json:"taskInfo"`
 		}{}
+
+		workerData.TaskHash = hash.Hex()
+		workerData.TaskFrom = eventInfo.From.Hex()
+		workerData.TaskInfo = eventInfo.Value
 
 		bytes, err := json.Marshal(workerData)
 		if err != nil {
