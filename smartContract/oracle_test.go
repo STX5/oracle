@@ -1,15 +1,17 @@
 package smartcontract
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"log"
 	"testing"
 )
 
-// 外界应该这样子使用该客户端
-func TestOracleClient(t *testing.T) {
-	ok, err := OracleClient.WriteData("1")
+// 测试Oracle的使用
+func TestOracleWriter(t *testing.T) {
+	// 创建oracle对象
+	oracle := NewOracle()
+	// 调用WriteData接口，向ResponseContract写入数据
+	ok, err := oracle.WriteData("当前任务发起者的eth公钥地址", "Worker根据任务信息获取到的数据")
 	if err != nil {
 		log.Fatal("写入错误", err)
 	}
@@ -18,23 +20,4 @@ func TestOracleClient(t *testing.T) {
 	} else {
 		fmt.Println("写入失败")
 	}
-	select {}
-}
-
-func TestGetEthClient(t *testing.T) {
-	ethCli := getEthClientInstance("ws://192.168.31.229:8546", 10)
-	fmt.Println(ethCli)
-}
-
-func TestGetEtcdClient(t *testing.T) {
-	ethCli := getEtcdClientInstance([]string{"192.168.31.229:2379"}, 10)
-	fmt.Println(ethCli)
-}
-
-func TestHash(t *testing.T) {
-	hash := sha256.New()
-	hash.Write([]byte("123456"))
-	sum := hash.Sum([]byte(""))
-	fmt.Println(sum)
-	fmt.Println(len(sum))
 }

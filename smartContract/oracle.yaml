@@ -2,6 +2,6 @@ etcd-urls:
   - 192.168.31.229:2379
 eth-url: ws://192.168.31.229:8546
 connect-timeout: 10
-request-contract-addr: 0x06f4f74252bf1E82651Dc8b141b26D443a3c7e11
-response-contract-addr: 0x06f4f74252bf1E82651Dc8b141b26D443a3c7e11
+request-contract-addr: 0xd9145CCE52D386f254917e481eB44e9943F39138
+response-contract-addr: 0xd8b934580fcE35a11B58C6D73aDeE468a2833fa8
 private-key: 9d8d022bc819c303592b7f384377769f9877b46d087c371c35f5e5049c1e28cf
