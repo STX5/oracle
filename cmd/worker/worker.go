@@ -1,23 +1,37 @@
 package main
 
 import (
-	smartcontract "oracle/smartContract"
+	"fmt"
 	"oracle/src/worker"
-	"time"
+	"os"
+	"strconv"
 )
 
-const legalPrefix = "1"
-const legalHexID = "99c82bb73505a3c0b453f9fa0e881d6e5a32a0c1"
+const (
+	legalPrefix = "1"
+	legalHexID  = "99c82bb73505a3c0b453f9fa0e881d6e5a32a0c1"
+)
+
+type TestWriter struct {
+}
+
+func (t TestWriter) WriteData(data string) (bool, error) {
+	fmt.Println(data)
+	return true, nil
+}
+
+var endpoints = []string{"localhost:2379"}
 
 func main() {
-	var endpoints = []string{"localhost:2379"}
-	woker, _ := worker.NewWoker(legalHexID, legalPrefix, endpoints, smartcontract.TestWriter{})
-	// to test alterPrefix
-	go func(t time.Duration) {
-		time.Sleep(t)
-		woker.AlterEndpoints(endpoints)
-		woker.AlterPrefix("000")
-	}(5 * time.Second)
+	var port int
 
-	woker.Run()
+	if len(os.Args) > 1 {
+		port, _ = strconv.Atoi(os.Args[1])
+	} else if len(os.Args) == 1 {
+		port = 8080
+	}
+
+	woker, _ := worker.NewWoker(legalHexID, legalPrefix, endpoints, &TestWriter{})
+	defer woker.Close()
+	woker.Run(port)
 }
