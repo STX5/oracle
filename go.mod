@@ -9,7 +9,6 @@ require (
 
 require (
 	github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6 // indirect
-	github.com/andybalholm/cascadia v1.3.1 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.2.0 // indirect
 	github.com/deckarep/golang-set/v2 v2.1.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
@@ -27,7 +26,6 @@ require (
 )
 
 require (
-	github.com/PuerkitoBio/goquery v1.8.1
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect

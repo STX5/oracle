@@ -2,8 +2,9 @@ package smartcontract
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/core/types"
 	"sync"
+
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // OracleWriter interface OracleWriter defines the methods to interact with smart contract
