@@ -89,16 +89,25 @@ func NewOracle() OracleWriter {
 		// 加载oracle的配置文件
 		oracle = new(oracleClient)
 		oracle.oracleConfig = new(oracleConfig)
-		if err := oracle.oracleConfig.loadFromYaml("oracle.yaml"); err != nil {
+		if err := oracle.loadFromYaml("oracle.yaml"); err != nil {
 			logger.Fatal("加载Oracle的配置文件失败", err)
 		} else {
 			logger.Println("加载Oracle配置文件oracle.yaml成功")
 		}
 
 		// 设置oracle依赖的ethCli对象
-		oracle.ethClient = getEthClient(oracle.EthUrl)
+		if cli, err := getEthClient(oracle.EthUrl); err != nil {
+			logger.Fatal("加载eth客户端对象失败")
+		} else {
+			oracle.ethClient = cli
+		}
+
 		// 设置oracle依赖的etcdCli对象
-		oracle.etcdClient = getEtcdClient(oracle.EtcdUrls, oracle.EtcdConnectTimeout)
+		if cli, err := getEtcdClient(oracle.EtcdUrls, oracle.EtcdConnectTimeout); err != nil {
+			logger.Fatal("加载etcd客户端对象失败")
+		} else {
+			oracle.etcdClient = cli
+		}
 
 		// 初始化任务映射记录结构
 		taskMap = new(oracleTaskMap)
@@ -288,30 +297,30 @@ func (o *oracleClient) registerOracleRequestContractMonitor() error {
 }
 
 // 获取etcd客户端的单例
-func getEtcdClient(urls []string, timeout time.Duration) *etcdClient {
+func getEtcdClient(urls []string, timeout time.Duration) (*etcdClient, error) {
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:   urls,
 		DialTimeout: timeout * time.Second,
 	})
 
 	if err != nil {
-		logger.Fatal("加载etcd客户端对象失败")
+		return nil, err
 	}
 
 	etcdCli := new(etcdClient)
 	etcdCli.Client = cli
-	return etcdCli
+	return etcdCli, nil
 }
 
 // 获取eth客户端的单例对象
-func getEthClient(url string) *ethClient {
+func getEthClient(url string) (*ethClient, error) {
 	cli, err := ethclient.Dial(url)
 	if err != nil {
-		logger.Fatal("eth客户端连接失败")
+		return nil, err
 	}
 	// 创建单例对象
 	ethCli := new(ethClient)
 	// 设置eth单例对象的属性
 	ethCli.Client = cli
-	return ethCli
+	return ethCli, nil
 }
