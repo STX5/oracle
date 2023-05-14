@@ -68,13 +68,13 @@ type oracleTaskMap struct {
 // lockAndUnlockResult 结果
 type lockAndUnlockResult struct {
 	Jsonrpc string `json:"jsonrpc"`
-	Id      string `json:"id"`
+	Id      int    `json:"id"`
 	Result  bool   `json:"result"`
 }
 
 type listWalletsResult struct {
 	Jsonrpc string `json:"jsonrpc"`
-	Id      string `json:"id"`
+	Id      int    `json:"id"`
 	Result  []struct {
 		Url      string `json:"url"`
 		Status   string `json:"status"`
@@ -118,7 +118,7 @@ func NewOracle() OracleWriter {
 		}
 
 		// 设置oracle依赖的ethCli对象
-		if cli, err := getEthClient(oracle.EthUrl); err != nil {
+		if cli, err := getEthClient(oracle.EthWsUrl); err != nil {
 			logger.Fatal("加载eth客户端对象失败")
 		} else {
 			oracle.ethClient = cli
@@ -135,8 +135,14 @@ func NewOracle() OracleWriter {
 		taskMap = new(oracleTaskMap)
 		taskMap.jobMap = make(map[string]string)
 
+		// 在这里先尝试解锁一次账户
+		err := oracle.tryUnlockAccount()
+		if err != nil {
+			logger.Fatal("尝试解锁账户失败")
+		}
+
 		// 开始监听请求智能合约
-		err := oracle.registerOracleRequestContractMonitor()
+		err = oracle.registerOracleRequestContractMonitor()
 		if err != nil {
 			logger.Fatal("监听OracleRequestContract失败")
 		} else {
@@ -243,7 +249,7 @@ func (o *oracleClient) registerOracleRequestContractMonitor() error {
 		}
 		logger.Println("JobFrom: ", eventInfo.From)
 		//logger.Println("Pattern: ", eventInfo.Value.Pattern)
-		//logger.Println("EthUrl: ", eventInfo.Value.Url)
+		//logger.Println("EthWsUrl: ", eventInfo.Value.Url)
 		logger.Println("BlockNumber: ", data.BlockNumber)
 		// 根据From和BlockNumber计算Hash
 		blockNumber := fmt.Sprintf("%d", data.BlockNumber)
@@ -393,7 +399,7 @@ func (o *oracleClient) tryUnlockAccount() error {
 	}
 
 	listWalletRequest := "{\"jsonrpc\":\"2.0\",\"method\":\"personal_listWallets\",\"params\":[],\"id\":1}"
-	listWalletResultBytes, err := invokeJsonRpc(o.EthUrl, []byte(listWalletRequest))
+	listWalletResultBytes, err := invokeJsonRpc(o.EthHttpUrl, []byte(listWalletRequest))
 	if err != nil {
 		return err
 	}
@@ -424,7 +430,7 @@ func (o *oracleClient) tryUnlockAccount() error {
 	// 如果被锁住了，那么执行如下解锁账户的操作
 	unlockRequest := "{\"jsonrpc\":\"2.0\",\"method\":\"personal_unlockAccount\",\"params\":[\"%s\", \"%s\", 30],\"id\":1}"
 	param := fmt.Sprintf(unlockRequest, publicKeyAddress.Hex(), o.OracleAccountPasswd)
-	unlockResultBytes, err := invokeJsonRpc(o.EthUrl, []byte(param))
+	unlockResultBytes, err := invokeJsonRpc(o.EthHttpUrl, []byte(param))
 
 	result := new(lockAndUnlockResult)
 	err = json.Unmarshal(unlockResultBytes, result)
@@ -453,6 +459,8 @@ func invokeJsonRpc(url string, param []byte) ([]byte, error) {
 		return nil, err
 	}
 	respBytes, err := io.ReadAll(resp.Body)
+	fmt.Println(string(respBytes))
+	defer resp.Body.Close()
 	if err != nil {
 		return nil, err
 	}

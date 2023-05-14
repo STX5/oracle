@@ -88,7 +88,7 @@ func TestOracleWriter(t *testing.T) {
 func TestWrite(t *testing.T) {
 	oracle := NewOracle()
 	taskMap.jobMap["0xca5b322c08d498403051304c4c9ec9092bdeaf381b0804ba1e6c6227c55721cc"] = "0x8Ff1EBd1639dF7ca2FCF67eAcDC7488d567ec040"
-	ok, err := oracle.WriteData("0xca5b322c08d498403051304c4c9ec9092bdeaf381b0804ba1e6c6227c55721cc", "lab405_test")
+	ok, err := oracle.WriteData("0xca5b322c08d498403051304c4c9ec9092bdeaf381b0804ba1e6c6227c55721cc", "hello,oracle")
 	if err != nil {
 		log.Fatal("写入错误", err)
 	}
