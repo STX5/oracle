@@ -43,7 +43,7 @@ type Worker struct {
 	CloseOnce        *sync.Once
 
 	/*
-		OracleWriter writes job result to Oracle smart contract
+		OracleWriter writes job result to oracleClient smart contract
 		TODO: add ETH CLIENT to OracleWriter
 	*/
 	smartContract.OracleWriter

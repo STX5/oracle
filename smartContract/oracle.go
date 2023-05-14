@@ -32,8 +32,8 @@ type OracleWriter interface {
 	WriteData(jobID string, data string) (bool, error)
 }
 
-// Oracle 预言机的实现
-type Oracle struct {
+// oracleClient 预言机的实现
+type oracleClient struct {
 	// etcd客户端
 	*etcdClient
 	*ethClient
@@ -52,7 +52,7 @@ type oracleTaskMap struct {
 // 定义仅本包内可见的数据
 var (
 	// oracle对象
-	oracle *Oracle
+	oracle *oracleClient
 	// 用于实现单例模式的工具对象
 	oracleOnce sync.Once
 	// 日志对象
@@ -73,7 +73,7 @@ var (
 func NewOracle() OracleWriter {
 	oracleOnce.Do(func() {
 		// 加载oracle的配置文件
-		oracle = new(Oracle)
+		oracle = new(oracleClient)
 		oracle.oracleConfig = new(oracleConfig)
 		if err := oracle.oracleConfig.loadFromYaml("oracle.yaml"); err != nil {
 			logger.Fatal("加载Oracle的配置文件失败", err)
@@ -104,7 +104,7 @@ func NewOracle() OracleWriter {
 }
 
 // WriteData 将数据写入指定的智能合约
-func (o *Oracle) WriteData(jobID string, data string) (bool, error) {
+func (o *oracleClient) WriteData(jobID string, data string) (bool, error) {
 	logger.Println("向Oracle的ResponseContract写入数据: ", data)
 	// 获取私钥，该私钥是oracle的私钥
 	privateKey, err := crypto.HexToECDSA(o.PrivateKey)
@@ -175,7 +175,7 @@ func (o *Oracle) WriteData(jobID string, data string) (bool, error) {
 }
 
 // 注册oracle请求合约的监听事件
-func (o *Oracle) registerOracleRequestContractMonitor() error {
+func (o *oracleClient) registerOracleRequestContractMonitor() error {
 	// 将用户传入的hex格式的地址，转换为Address对象
 	// 创建查询过滤器
 	queryFilter := ethereum.FilterQuery{

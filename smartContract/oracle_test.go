@@ -16,7 +16,7 @@ func TestOracleWriter(t *testing.T) {
 
 func TestWrite(t *testing.T) {
 	oracle := NewOracle()
-	ok, err := oracle.WriteData("0x006ba56143a8f1a5EcB6607a75bf6bc66F345BB0", "lab405_test")
+	ok, err := oracle.WriteData("任务id", "lab405_test")
 	if err != nil {
 		log.Fatal("写入错误", err)
 	}
