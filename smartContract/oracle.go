@@ -54,13 +54,12 @@ type oracleClient struct {
 	*oracleConfig
 }
 
-// JobMap 记录JobId和JobFrom的映射
-type JobMap map[string]string
-
 // 任务映射
 type oracleTaskMap struct {
+	// 保证oracleTaskMap更新的原子性
 	sync.Mutex
-	JobMap
+	// jobMap 记录JobId和JobFrom的映射
+	jobMap map[string]string
 }
 
 // 定义仅本包内可见的数据
@@ -170,29 +169,23 @@ func (o *oracleClient) WriteData(jobID string, data string) (bool, error) {
 	transactOpts.GasLimit = uint64(300000) // in units
 	transactOpts.GasPrice = gas
 
-	oracleResponseContract, err := response.NewResponse(common.HexToAddress(o.ResponseContractAddr),
-		oracle.ethClient.Client)
+	oracleResponseContract, err := response.NewResponse(common.HexToAddress(o.ResponseContractAddr), oracle.ethClient.Client)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// 对taskMap进行加锁
-	taskMap.Lock()
-	var toAddr common.Address
-	v, ok := taskMap.JobMap[jobID]
-	if !ok {
-		// 如果当前jobID不存在，那么说明是非法的jobID
-		return false, fmt.Errorf("不存在的JobID: %s", jobID)
-	}
-	// 否则说明jobID是存在的，那么取出当前jobID对应的toAddr
-	toAddr = common.HexToAddress(v)
-	defer taskMap.Unlock()
-
-	// 将worker传入的数据写入智能合约
-	_, err = oracleResponseContract.SetValue(transactOpts, toAddr, data)
+	toAddr, err := taskMap.get(jobID)
 	if err != nil {
 		return false, err
 	}
+
+	_, err = oracleResponseContract.SetValue(transactOpts, common.HexToAddress(toAddr), data)
+	if err != nil {
+		return false, err
+	}
+
+	// 如果写入成功，那么需要删除当前jobID和任务发起者的映射
+	taskMap.remove(jobID)
 	logger.Println("数据: {ToAddr: ", toAddr, ", Data: ", data, "}写入智能合约成功")
 	return true, nil
 }
@@ -243,19 +236,10 @@ func (o *oracleClient) registerOracleRequestContractMonitor() error {
 		jobID := crypto.Keccak256Hash([]byte(eventInfo.From.Hex() + blockNumber))
 		logger.Println("JobID: ", jobID)
 
-		// 在这里加锁保证map操作的原子性
-		taskMap.Lock()
-		_, ok := taskMap.JobMap[jobID.Hex()]
-		if !ok {
-			// 说明存在了重复的任务
-			return fmt.Errorf("出现了重复JobID: %s", jobID.Hex())
-		} else {
-			// 说明没有发现重复任务，那么需要将该任务的id和发起任务的发起人的公钥进行绑定
-			taskMap.JobMap[jobID.Hex()] = eventInfo.From.Hex()
-			logger.Println("记录{JobID: ", jobID, ", TaskFrom: ", eventInfo.From.Hex(), "}")
+		// 将当前jobID和job发起者的地址映射关系存放起来
+		if err = taskMap.put(jobID.Hex(), eventInfo.From.Hex()); err != nil {
+			return err
 		}
-		// 释放锁
-		defer taskMap.Unlock()
 		// 创建job值，传输给job的值，是符合worker的需要的
 		workerData := struct {
 			URL     string
@@ -323,4 +307,37 @@ func getEthClient(url string) (*ethClient, error) {
 	// 设置eth单例对象的属性
 	ethCli.Client = cli
 	return ethCli, nil
+}
+
+func (o *oracleTaskMap) put(jobID string, jobFrom string) error {
+	o.Lock()
+	defer o.Unlock()
+	_, ok := taskMap.jobMap[jobID]
+	if !ok {
+		// 说明存在了重复的任务
+		return fmt.Errorf("出现了重复JobID: %s", jobID)
+	} else {
+		// 说明没有发现重复任务，那么需要将该任务的id和发起任务的发起人的公钥进行绑定
+		taskMap.jobMap[jobID] = jobFrom
+		logger.Println("记录{JobID: ", jobID, ", TaskFrom: ", jobFrom, "}")
+	}
+	return nil
+}
+
+func (o *oracleTaskMap) get(jobID string) (string, error) {
+	o.Lock()
+	defer o.Unlock()
+	v, ok := taskMap.jobMap[jobID]
+	if !ok {
+		// 如果当前jobID不存在，那么说明是非法的jobID
+		return "", fmt.Errorf("不存在的JobID: %s", jobID)
+	}
+	// 将jobID对应的任务发起者地址返回
+	return v, nil
+}
+
+func (o *oracleTaskMap) remove(jobID string) {
+	o.Lock()
+	defer o.Unlock()
+	delete(o.jobMap, jobID)
 }
