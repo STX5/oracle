@@ -28,7 +28,7 @@ func TestWrite(t *testing.T) {
 }
 
 func TestQueryEtcd(t *testing.T) {
-	client := getEtcdClientInstance([]string{"127.0.0.1:2379"}, 100000)
+	client := getEtcdClient([]string{"127.0.0.1:2379"}, 100000)
 	response, err := client.Get(context.Background(), "0xf2441c45792b049da8907d5f6a5c94896bcac0b16a48bee4b6ea1b0c338dd309")
 	if err != nil {
 		log.Fatal(err)

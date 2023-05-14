@@ -11,15 +11,17 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/sirupsen/logrus"
+	clientv3 "go.etcd.io/etcd/client/v3"
 	"log"
 	"math/big"
 	"oracle/smartContract/contract/request"
 	"oracle/smartContract/contract/response"
-	"oracle/src/worker"
 	"os"
 	"strings"
 	"sync"
+	"time"
 )
 
 // OracleWriter interface OracleWriter defines the methods to interact with smart contract
@@ -32,11 +34,23 @@ type OracleWriter interface {
 	WriteData(jobID string, data string) (bool, error)
 }
 
+// 定义eth客户端
+type ethClient struct {
+	*ethclient.Client
+}
+
+// 定义etcd客户端
+type etcdClient struct {
+	*clientv3.Client
+}
+
 // oracleClient 预言机的实现
 type oracleClient struct {
 	// etcd客户端
 	*etcdClient
+	// eth客户端匿名对象
 	*ethClient
+	// oracleConfig
 	*oracleConfig
 }
 
@@ -82,9 +96,9 @@ func NewOracle() OracleWriter {
 		}
 
 		// 设置oracle依赖的ethCli对象
-		oracle.ethClient = getEthClientInstance(oracle.EthUrl, oracle.ConnectTimeout)
+		oracle.ethClient = getEthClient(oracle.EthUrl)
 		// 设置oracle依赖的etcdCli对象
-		oracle.etcdClient = getEtcdClientInstance(oracle.EtcdUrls, oracle.ConnectTimeout)
+		oracle.etcdClient = getEtcdClient(oracle.EtcdUrls, oracle.EtcdConnectTimeout)
 
 		// 初始化任务映射记录结构
 		taskMap = new(oracleTaskMap)
@@ -107,7 +121,7 @@ func NewOracle() OracleWriter {
 func (o *oracleClient) WriteData(jobID string, data string) (bool, error) {
 	logger.Println("向Oracle的ResponseContract写入数据: ", data)
 	// 获取私钥，该私钥是oracle的私钥
-	privateKey, err := crypto.HexToECDSA(o.PrivateKey)
+	privateKey, err := crypto.HexToECDSA(o.OraclePrivateKey)
 	if err != nil {
 		return false, err
 	}
@@ -212,7 +226,7 @@ func (o *oracleClient) registerOracleRequestContractMonitor() error {
 		}
 		logger.Println("JobFrom: ", eventInfo.From)
 		logger.Println("Pattern: ", eventInfo.Value.Pattern)
-		logger.Println("Url: ", eventInfo.Value.Url)
+		logger.Println("EthUrl: ", eventInfo.Value.Url)
 		logger.Println("BlockNumber: ", data.BlockNumber)
 		// 根据From和BlockNumber计算Hash
 		blockNumber := fmt.Sprintf("%d", data.BlockNumber)
@@ -234,18 +248,20 @@ func (o *oracleClient) registerOracleRequestContractMonitor() error {
 		// 释放锁
 		defer taskMap.Unlock()
 		// 创建job值，传输给job的值，是符合worker的需要的
-		jobVal := new(worker.JobVal)
-		jobVal.URL = eventInfo.Value.Url
-		jobVal.Pattern = eventInfo.Value.Pattern
+		workerData := struct {
+			URL     string
+			Pattern string
+		}{URL: eventInfo.Value.Url, Pattern: eventInfo.Value.Pattern}
 
 		// 	序列化jobVal
-		jobValBytes, err := json.Marshal(jobVal)
+		workerDataBytes, err := json.Marshal(workerData)
 		if err != nil {
 			return err
 		}
 
-		logger.Println("生成任务{key: ", jobID.Hex(), ", value: ", string(jobValBytes), "}")
-		return o.put(jobID.Hex(), string(jobValBytes))
+		logger.Println("生成任务{key: ", jobID.Hex(), ", value: ", string(workerDataBytes), "}")
+		_, err = o.Put(context.Background(), jobID.Hex(), string(workerDataBytes))
+		return err
 	}
 
 	go func() {
@@ -269,4 +285,33 @@ func (o *oracleClient) registerOracleRequestContractMonitor() error {
 
 	// 接收并处理事件
 	return nil
+}
+
+// 获取etcd客户端的单例
+func getEtcdClient(urls []string, timeout time.Duration) *etcdClient {
+	cli, err := clientv3.New(clientv3.Config{
+		Endpoints:   urls,
+		DialTimeout: timeout * time.Second,
+	})
+
+	if err != nil {
+		logger.Fatal("加载etcd客户端对象失败")
+	}
+
+	etcdCli := new(etcdClient)
+	etcdCli.Client = cli
+	return etcdCli
+}
+
+// 获取eth客户端的单例对象
+func getEthClient(url string) *ethClient {
+	cli, err := ethclient.Dial(url)
+	if err != nil {
+		logger.Fatal("eth客户端连接失败")
+	}
+	// 创建单例对象
+	ethCli := new(ethClient)
+	// 设置eth单例对象的属性
+	ethCli.Client = cli
+	return ethCli
 }
