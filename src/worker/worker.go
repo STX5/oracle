@@ -221,7 +221,6 @@ func (woker Worker) Work(ctx context.Context) {
 				time.Sleep(6 * time.Second) // this is for testing
 				// if success, delete job
 				defer woker.ETCDClient.Delete(context.Background(), job.ID)
-				// 这里做了修改，写回数据的时候，需要将job.JobFrom字段传回去，智能合约需要
 				woker.OracleWriter.WriteData(data)
 			}(job)
 		}

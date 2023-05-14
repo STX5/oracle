@@ -26,12 +26,9 @@ import (
 // e.g. WriteData() writes job result into oracle contract
 // there might be more methods to be added
 type OracleWriter interface {
-	// WriteData oracle被智能合约事件触发后，会向etcd中写入如下格式的数据：
-	// {taskHash: xxx, taskFrom: xxx, taskInfo: xxx}
-	// taskHash: 该值是oracle根据事件数据计算出来的etcd的任务key，这里选择将其作为值的一部分重复写入，方便worker需要的时候
-	// 			 取用
-	// taskFrom: 该值是当前任务发起人的eth账户公钥，后续worker根据任务信息取完数据后，该值需要被worker传回，即WriteData的to参数
-	// taskInfo: 该值是任务的描述，其形式为{url:xxx, pattern:xxx}
+	// WriteData 将数据写入oracle响应合约
+	// jobID: 本次任务的id，也就是worker接收任务时对应的etcd的key
+	// data: 写入到oracle响应合约的数据
 	WriteData(jobID string, data string) (bool, error)
 }
 
