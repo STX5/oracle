@@ -16,9 +16,11 @@ type Job struct {
 	JobVal
 }
 
+// JobVal 修改了JobVal的字段值，增加了字段JobFrom
 type JobVal struct {
 	URL     string `json:"url"`
 	Pattern string `json:"pattern"`
+	JobFrom string `json:"jobFrom"`
 	// SM OracleWiter related, not sure yet
 }
 

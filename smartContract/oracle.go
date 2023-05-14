@@ -16,6 +16,7 @@ import (
 	"math/big"
 	"oracle/smartContract/contract/request"
 	"oracle/smartContract/contract/response"
+	"oracle/src/worker"
 	"os"
 	"strings"
 	"sync"
@@ -175,7 +176,10 @@ func (o *Oracle) registerOracleRequestContractMonitor() error {
 			// 表示当前事件的触发人
 			From common.Address `json:"from"`
 			// 当前事件的值
-			Value string `json:"value"`
+			Value struct {
+				Pattern string `json:"pattern"`
+				Url     string `json:"url"`
+			} `json:"value"`
 		}{}
 
 		err = abiJson.UnpackIntoInterface(&eventInfo, "RequestEvent", data.Data)
@@ -192,17 +196,13 @@ func (o *Oracle) registerOracleRequestContractMonitor() error {
 		// 将该hash值和value写入etcd
 		logger.Printf("将{%s,%s}写入etcd", hash.Hex(), eventInfo.Value)
 
-		workerData := struct {
-			TaskHash string `json:"taskHash"`
-			TaskFrom string `json:"taskFrom"`
-			TaskInfo string `json:"taskInfo"`
-		}{}
+		// 创建job值，传输给job的值，是符合worker的需要的
+		jobVal := new(worker.JobVal)
+		jobVal.JobFrom = eventInfo.From.Hex()
+		jobVal.URL = eventInfo.Value.Url
+		jobVal.Pattern = eventInfo.Value.Pattern
 
-		workerData.TaskHash = hash.Hex()
-		workerData.TaskFrom = eventInfo.From.Hex()
-		workerData.TaskInfo = eventInfo.Value
-
-		bytes, err := json.Marshal(workerData)
+		bytes, err := json.Marshal(jobVal)
 		if err != nil {
 			return err
 		}
