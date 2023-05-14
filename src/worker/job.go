@@ -20,7 +20,6 @@ type Job struct {
 type JobVal struct {
 	URL     string `json:"url"`
 	Pattern string `json:"pattern"`
-	JobFrom string `json:"jobFrom"`
 	// SM OracleWiter related, not sure yet
 }
 

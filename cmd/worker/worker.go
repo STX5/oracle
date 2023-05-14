@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	smartcontract "oracle/smartContract"
 	"oracle/src/worker"
 	"os"
 	"strconv"
@@ -32,9 +31,7 @@ func main() {
 		port = 8080
 	}
 
-	// 创建oracle对象
-	oracle := smartcontract.NewOracle()
-	woker, _ := worker.NewWoker(legalHexID, legalPrefix, endpoints, oracle)
+	woker, _ := worker.NewWoker(legalHexID, legalPrefix, endpoints, &TestWriter{})
 	defer woker.Close()
 	woker.Run(port)
 }

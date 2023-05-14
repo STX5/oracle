@@ -32,7 +32,7 @@ type OracleWriter interface {
 	// 			 取用
 	// taskFrom: 该值是当前任务发起人的eth账户公钥，后续worker根据任务信息取完数据后，该值需要被worker传回，即WriteData的to参数
 	// taskInfo: 该值是任务的描述，其形式为{url:xxx, pattern:xxx}
-	WriteData(to string, data string) (bool, error)
+	WriteData(jobID string, data string) (bool, error)
 }
 
 // Oracle 预言机的实现
@@ -41,6 +41,15 @@ type Oracle struct {
 	*etcdClient
 	*ethClient
 	*oracleConfig
+}
+
+// JobMap 记录JobId和JobFrom的映射
+type JobMap map[string]string
+
+// 任务映射
+type oracleTaskMap struct {
+	sync.Mutex
+	JobMap
 }
 
 // 定义仅本包内可见的数据
@@ -59,6 +68,8 @@ var (
 			DisableLevelTruncation: true,
 		},
 	}
+	// 任务映射
+	taskMap *oracleTaskMap
 )
 
 // NewOracle 初始化预言机对象
@@ -78,6 +89,9 @@ func NewOracle() OracleWriter {
 		// 设置oracle依赖的etcdCli对象
 		oracle.etcdClient = getEtcdClientInstance(oracle.EtcdUrls, oracle.ConnectTimeout)
 
+		// 初始化任务映射记录结构
+		taskMap = new(oracleTaskMap)
+
 		// 开始监听请求智能合约
 		err := oracle.registerOracleRequestContractMonitor()
 		if err != nil {
@@ -93,7 +107,7 @@ func NewOracle() OracleWriter {
 }
 
 // WriteData 将数据写入指定的智能合约
-func (o *Oracle) WriteData(to string, data string) (bool, error) {
+func (o *Oracle) WriteData(jobID string, data string) (bool, error) {
 	logger.Println("向Oracle的ResponseContract写入数据: ", data)
 	// 获取私钥，该私钥是oracle的私钥
 	privateKey, err := crypto.HexToECDSA(o.PrivateKey)
@@ -142,11 +156,24 @@ func (o *Oracle) WriteData(to string, data string) (bool, error) {
 		log.Fatal(err)
 	}
 
-	_, err = oracleResponseContract.SetValue(transactOpts, common.HexToAddress(to), data)
+	// 对taskMap进行加锁
+	taskMap.Lock()
+	var toAddr common.Address
+	v, ok := taskMap.JobMap[jobID]
+	if !ok {
+		// 如果当前jobID不存在，那么说明是非法的jobID
+		return false, fmt.Errorf("不存在的JobID: %s", jobID)
+	}
+	// 否则说明jobID是存在的，那么取出当前jobID对应的toAddr
+	toAddr = common.HexToAddress(v)
+	defer taskMap.Unlock()
+
+	// 将worker传入的数据写入智能合约
+	_, err = oracleResponseContract.SetValue(transactOpts, toAddr, data)
 	if err != nil {
 		return false, err
 	}
-	logger.Println("写入数据成功")
+	logger.Println("数据: {ToAddr: ", toAddr, ", Data: ", data, "}写入智能合约成功")
 	return true, nil
 }
 
@@ -186,29 +213,42 @@ func (o *Oracle) registerOracleRequestContractMonitor() error {
 		if err != nil {
 			logger.Fatal("解析事件数据失败")
 		}
-		logger.Println("sender: ", eventInfo.From)
-		logger.Println("taskId: ", eventInfo.Value)
+		logger.Println("JobFrom: ", eventInfo.From)
+		logger.Println("Pattern: ", eventInfo.Value.Pattern)
+		logger.Println("Url: ", eventInfo.Value.Url)
 		logger.Println("BlockNumber: ", data.BlockNumber)
 		// 根据From和BlockNumber计算Hash
 		blockNumber := fmt.Sprintf("%d", data.BlockNumber)
-		// 计算hash
-		hash := crypto.Keccak256Hash([]byte(eventInfo.From.Hex() + blockNumber))
-		// 将该hash值和value写入etcd
-		logger.Printf("将{%s,%s}写入etcd", hash.Hex(), eventInfo.Value)
+		// 计算hash，生成jobID
+		jobID := crypto.Keccak256Hash([]byte(eventInfo.From.Hex() + blockNumber))
+		logger.Println("JobID: ", jobID)
 
+		// 在这里加锁保证map操作的原子性
+		taskMap.Lock()
+		_, ok := taskMap.JobMap[jobID.Hex()]
+		if !ok {
+			// 说明存在了重复的任务
+			return fmt.Errorf("出现了重复JobID: %s", jobID.Hex())
+		} else {
+			// 说明没有发现重复任务，那么需要将该任务的id和发起任务的发起人的公钥进行绑定
+			taskMap.JobMap[jobID.Hex()] = eventInfo.From.Hex()
+			logger.Println("记录{JobID: ", jobID, ", TaskFrom: ", eventInfo.From.Hex(), "}")
+		}
+		// 释放锁
+		defer taskMap.Unlock()
 		// 创建job值，传输给job的值，是符合worker的需要的
 		jobVal := new(worker.JobVal)
-		jobVal.JobFrom = eventInfo.From.Hex()
 		jobVal.URL = eventInfo.Value.Url
 		jobVal.Pattern = eventInfo.Value.Pattern
 
-		bytes, err := json.Marshal(jobVal)
+		// 	序列化jobVal
+		jobValBytes, err := json.Marshal(jobVal)
 		if err != nil {
 			return err
 		}
 
-		logger.Println("生成任务", string(bytes))
-		return o.put(hash.Hex(), string(bytes))
+		logger.Println("生成任务{key: ", jobID.Hex(), ", value: ", string(jobValBytes), "}")
+		return o.put(jobID.Hex(), string(jobValBytes))
 	}
 
 	go func() {
@@ -217,12 +257,12 @@ func (o *Oracle) registerOracleRequestContractMonitor() error {
 			select {
 			case err := <-subscription.Err():
 				// 如果失败了，那么调用外界传入的失败处理器
-				logger.Println("智能合约事件监听错误", err)
+				logger.Println("智能合约事件监听错误: ", err)
 			case data := <-channel:
 				logger.Println("收到一个新的智能合约事件", data)
 				// 处理事件
 				if err = handleEventFunc(data); err != nil {
-					logger.Println("处理事件发生错误")
+					logger.Println("处理事件发生错误: ", err)
 				} else {
 					logger.Println("事件被成功解析并写入etcd，等到worker处理")
 				}
