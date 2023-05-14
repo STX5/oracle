@@ -1,7 +1,7 @@
 etcd-urls:
   - 127.0.0.1:2379
 etcd-connect-timeout: 100000
-eth-url: ws://192.168.31.229:8543
-request-contract-addr: 0x32196FDE0e3a1DeA92E1cd27B5aB3D4F5Dfb212B
-response-contract-addr: 0x510701BcFd9f6DF4D2BA9278576D059D8CB1FD4b
-oracle-private-key: 7cf08b6d358b1b88234a3c253b6257587e71fdcc4d37b74973e95809f23986a1
+eth-url: ws://127.0.0.1:8543
+request-contract-addr: 0x0E95bD07147941B356319D79B653a3EEaB2DCf89
+response-contract-addr: 0x219fe99A09064A7e2C7Cc08D7249d135a1F3aDAD
+oracle-private-key: 9e082d9aa6240a7af133616ac9f740aa67ba72b0372a366ac9890bb6e9740321

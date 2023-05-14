@@ -10,7 +10,7 @@ import (
 type oracleConfig struct {
 	EtcdUrls           []string      `yaml:"etcd-urls"`
 	EtcdConnectTimeout time.Duration `yaml:"etcd-connect-timeout"`
-	EthUrl             string        `yaml:"url"`
+	EthUrl             string        `yaml:"eth-url"`
 	// oracle请求合约地址，预言机需要监听该地址
 	RequestContractAddr string `yaml:"request-contract-addr"`
 	// oracle响应合约地址，worker获取数据后写入该地址

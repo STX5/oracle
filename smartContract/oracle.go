@@ -110,6 +110,7 @@ func NewOracle() OracleWriter {
 
 		// 初始化任务映射记录结构
 		taskMap = new(oracleTaskMap)
+		taskMap.jobMap = make(map[string]string)
 
 		// 开始监听请求智能合约
 		err := oracle.registerOracleRequestContractMonitor()
@@ -214,10 +215,7 @@ func (o *oracleClient) registerOracleRequestContractMonitor() error {
 			// 表示当前事件的触发人
 			From common.Address `json:"from"`
 			// 当前事件的值
-			Value struct {
-				Pattern string `json:"pattern"`
-				Url     string `json:"url"`
-			} `json:"value"`
+			Value string `json:"value"`
 		}{}
 
 		err = abiJson.UnpackIntoInterface(&eventInfo, "RequestEvent", data.Data)
@@ -225,8 +223,8 @@ func (o *oracleClient) registerOracleRequestContractMonitor() error {
 			logger.Fatal("解析事件数据失败")
 		}
 		logger.Println("JobFrom: ", eventInfo.From)
-		logger.Println("Pattern: ", eventInfo.Value.Pattern)
-		logger.Println("EthUrl: ", eventInfo.Value.Url)
+		//logger.Println("Pattern: ", eventInfo.Value.Pattern)
+		//logger.Println("EthUrl: ", eventInfo.Value.Url)
 		logger.Println("BlockNumber: ", data.BlockNumber)
 		// 根据From和BlockNumber计算Hash
 		blockNumber := fmt.Sprintf("%d", data.BlockNumber)
@@ -240,9 +238,14 @@ func (o *oracleClient) registerOracleRequestContractMonitor() error {
 		}
 		// 创建job值，传输给job的值，是符合worker的需要的
 		workerData := struct {
-			URL     string
-			Pattern string
-		}{URL: eventInfo.Value.Url, Pattern: eventInfo.Value.Pattern}
+			URL     string `json:"url"`
+			Pattern string `json:"pattern"`
+		}{}
+
+		err = json.Unmarshal([]byte(eventInfo.Value), &workerData)
+		if err != nil {
+			return err
+		}
 
 		// 	序列化jobVal
 		workerDataBytes, err := json.Marshal(workerData)
@@ -312,7 +315,7 @@ func (o *oracleTaskMap) put(jobID string, jobFrom string) error {
 	o.Lock()
 	defer o.Unlock()
 	_, ok := taskMap.jobMap[jobID]
-	if !ok {
+	if ok {
 		// 说明存在了重复的任务
 		return fmt.Errorf("出现了重复JobID: %s", jobID)
 	} else {
