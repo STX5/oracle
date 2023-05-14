@@ -118,7 +118,6 @@ func NewOracle() OracleWriter {
 		} else {
 			logger.Println("开始监听OracleRequestContract合约事件")
 		}
-		// 处理监听事件
 
 		logger.Println("oracle对象初始化成功: ", oracle.oracleConfig)
 	})
@@ -127,7 +126,6 @@ func NewOracle() OracleWriter {
 
 // WriteData 将数据写入指定的智能合约
 func (o *oracleClient) WriteData(jobID string, data string) (bool, error) {
-	logger.Println("向Oracle的ResponseContract写入数据: ", data)
 	// 获取私钥，该私钥是oracle的私钥
 	privateKey, err := crypto.HexToECDSA(o.OraclePrivateKey)
 	if err != nil {
@@ -165,8 +163,8 @@ func (o *oracleClient) WriteData(jobID string, data string) (bool, error) {
 		return false, fmt.Errorf("NewKeyedTransactorWithChainID调用失败")
 	}
 	transactOpts.Nonce = big.NewInt(int64(nonce))
-	transactOpts.Value = big.NewInt(0)     // in wei
-	transactOpts.GasLimit = uint64(300000) // in units
+	transactOpts.Value = big.NewInt(0)
+	transactOpts.GasLimit = uint64(300000)
 	transactOpts.GasPrice = gas
 
 	oracleResponseContract, err := response.NewResponse(common.HexToAddress(o.ResponseContractAddr), oracle.ethClient.Client)
@@ -309,6 +307,7 @@ func getEthClient(url string) (*ethClient, error) {
 	return ethCli, nil
 }
 
+// 向taskMap中添加一个新的映射关系
 func (o *oracleTaskMap) put(jobID string, jobFrom string) error {
 	o.Lock()
 	defer o.Unlock()
@@ -324,6 +323,7 @@ func (o *oracleTaskMap) put(jobID string, jobFrom string) error {
 	return nil
 }
 
+// 从taskMap中查询jobID对应的job发起者地址
 func (o *oracleTaskMap) get(jobID string) (string, error) {
 	o.Lock()
 	defer o.Unlock()
@@ -336,6 +336,7 @@ func (o *oracleTaskMap) get(jobID string) (string, error) {
 	return v, nil
 }
 
+// 移除jobID对应的键值对
 func (o *oracleTaskMap) remove(jobID string) {
 	o.Lock()
 	defer o.Unlock()
