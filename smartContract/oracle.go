@@ -1,6 +1,7 @@
 package smartcontract
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
@@ -14,8 +15,10 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/sirupsen/logrus"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"io"
 	"log"
 	"math/big"
+	"net/http"
 	"oracle/smartContract/contract/request"
 	"oracle/smartContract/contract/response"
 	"os"
@@ -60,6 +63,26 @@ type oracleTaskMap struct {
 	sync.Mutex
 	// jobMap 记录JobId和JobFrom的映射
 	jobMap map[string]string
+}
+
+// lockAndUnlockResult 结果
+type lockAndUnlockResult struct {
+	Jsonrpc string `json:"jsonrpc"`
+	Id      string `json:"id"`
+	Result  bool   `json:"result"`
+}
+
+type listWalletsResult struct {
+	Jsonrpc string `json:"jsonrpc"`
+	Id      string `json:"id"`
+	Result  []struct {
+		Url      string `json:"url"`
+		Status   string `json:"status"`
+		Accounts []struct {
+			Address string `json:"address"`
+			Url     string `json:"url"`
+		} `json:"accounts"`
+	} `json:"result"`
 }
 
 // 定义仅本包内可见的数据
@@ -127,23 +150,19 @@ func NewOracle() OracleWriter {
 
 // WriteData 将数据写入指定的智能合约
 func (o *oracleClient) WriteData(jobID string, data string) (bool, error) {
+	// 写入数据之前，先尝试解锁账户
+	err := o.tryUnlockAccount()
+	if err != nil {
+		logger.Println("尝试解锁账户失败")
+		return false, err
+	}
+
 	// 获取私钥，该私钥是oracle的私钥
 	privateKey, err := crypto.HexToECDSA(o.OraclePrivateKey)
 	if err != nil {
 		return false, err
 	}
-
-	// 获得当前私钥对应的公钥
-	publicKey := privateKey.Public()
-	// 获取公钥的ECDSA形式
-	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
-	if !ok {
-		return false, fmt.Errorf("无法将公钥转换为ECDSA形式")
-	}
-
-	// 获取eth的客户端对象
-	// 当前智能合约的调用地址
-	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
+	err, fromAddress := getPublicKeyAddress(privateKey)
 	nonce, err := o.PendingNonceAt(context.Background(), fromAddress)
 	if err != nil {
 		return false, err
@@ -281,6 +300,21 @@ func (o *oracleClient) registerOracleRequestContractMonitor() error {
 	return nil
 }
 
+func getPublicKeyAddress(privateKey *ecdsa.PrivateKey) (error, common.Address) {
+	// 获得当前私钥对应的公钥
+	publicKey := privateKey.Public()
+	// 获取公钥的ECDSA形式
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		return fmt.Errorf("无法将公钥转换为ECDSA形式"), common.Address{}
+	}
+
+	// 获取eth的客户端对象
+	// 当前智能合约的调用地址
+	publicAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
+	return nil, publicAddress
+}
+
 // 获取etcd客户端的单例
 func getEtcdClient(urls []string, timeout time.Duration) (*etcdClient, error) {
 	cli, err := clientv3.New(clientv3.Config{
@@ -344,4 +378,83 @@ func (o *oracleTaskMap) remove(jobID string) {
 	o.Lock()
 	defer o.Unlock()
 	delete(o.jobMap, jobID)
+}
+
+// 解锁预言机的账户，不然无法进行合约的执行
+func (o *oracleClient) tryUnlockAccount() error {
+	// 获取私钥，该私钥是oracle的私钥
+	privateKey, err := crypto.HexToECDSA(o.OraclePrivateKey)
+	if err != nil {
+		return err
+	}
+	err, publicKeyAddress := getPublicKeyAddress(privateKey)
+	if err != nil {
+		return err
+	}
+
+	listWalletRequest := "{\"jsonrpc\":\"2.0\",\"method\":\"personal_listWallets\",\"params\":[],\"id\":1}"
+	listWalletResultBytes, err := invokeJsonRpc(o.EthUrl, []byte(listWalletRequest))
+	if err != nil {
+		return err
+	}
+
+	listWalletResult := new(listWalletsResult)
+	err = json.Unmarshal(listWalletResultBytes, listWalletResult)
+	if err != nil {
+		return err
+	}
+
+	isLocked := true
+	for _, result := range listWalletResult.Result {
+		for _, account := range result.Accounts {
+			if account.Address == publicKeyAddress.Hex() {
+				if result.Status == "Locked" {
+					isLocked = true
+					break
+				}
+			}
+		}
+	}
+
+	if !isLocked {
+		// 没有被锁住，那么就不进行任何操作
+		return nil
+	}
+
+	// 如果被锁住了，那么执行如下解锁账户的操作
+	unlockRequest := "{\"jsonrpc\":\"2.0\",\"method\":\"personal_unlockAccount\",\"params\":[\"%s\", \"%s\", 30],\"id\":1}"
+	param := fmt.Sprintf(unlockRequest, publicKeyAddress.Hex(), o.OracleAccountPasswd)
+	unlockResultBytes, err := invokeJsonRpc(o.EthUrl, []byte(param))
+
+	result := new(lockAndUnlockResult)
+	err = json.Unmarshal(unlockResultBytes, result)
+	if err != nil {
+		return err
+	}
+
+	if result.Result {
+		return nil
+	}
+
+	return fmt.Errorf("解锁账户失败")
+}
+
+// 生成ethRequest，Marshal 成[]byte ，传入do函数即可操作ethereum 节点
+func invokeJsonRpc(url string, param []byte) ([]byte, error) {
+	reader := bytes.NewReader(param)
+	req, err := http.NewRequest("POST", url, reader)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	return respBytes, nil
 }

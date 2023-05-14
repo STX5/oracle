@@ -16,7 +16,8 @@ type oracleConfig struct {
 	// oracle响应合约地址，worker获取数据后写入该地址
 	ResponseContractAddr string `yaml:"response-contract-addr"`
 	// 写入oracle智能合约的私钥
-	OraclePrivateKey string `yaml:"oracle-private-key"`
+	OraclePrivateKey    string `yaml:"oracle-private-key"`
+	OracleAccountPasswd string `yaml:"oracle-account-passwd"`
 }
 
 // 从配置文件中加载配置数据

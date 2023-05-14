@@ -5,3 +5,4 @@ eth-url: ws://127.0.0.1:8543
 request-contract-addr: 0x0E95bD07147941B356319D79B653a3EEaB2DCf89
 response-contract-addr: 0x219fe99A09064A7e2C7Cc08D7249d135a1F3aDAD
 oracle-private-key: 9e082d9aa6240a7af133616ac9f740aa67ba72b0372a366ac9890bb6e9740321
+oracle-account-passwd: cs237239
