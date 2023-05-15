@@ -7,6 +7,29 @@ import (
 	"testing"
 )
 
+func TestLockAndUnlockAccount(t *testing.T) {
+	unlockRequest := "{\"jsonrpc\":\"2.0\",\"method\":\"personal_unlockAccount\",\"params\":[\"0x8Ff1EBd1639dF7ca2FCF67eAcDC7488d567ec040\", \"cs237239\", 30],\"id\":1}"
+	lockRequest := "{\"jsonrpc\":\"2.0\",\"method\":\"personal_lockAccount\",\"params\":[\"0x8Ff1EBd1639dF7ca2FCF67eAcDC7488d567ec040\"],\"id\":1}"
+	listWalletRequest := "{\"jsonrpc\":\"2.0\",\"method\":\"personal_listWallets\",\"params\":[],\"id\":1}"
+	result, err := invokeJsonRpc("http://127.0.0.1:8545", []byte(unlockRequest))
+	if err != nil {
+		logger.Fatal("解锁账户失败")
+	}
+	logger.Println(string(result))
+
+	result, err = invokeJsonRpc("http://127.0.0.1:8545", []byte(lockRequest))
+	if err != nil {
+		logger.Fatal("锁定账户失败")
+	}
+	logger.Println(string(result))
+
+	result, err = invokeJsonRpc("http://127.0.0.1:8545", []byte(listWalletRequest))
+	if err != nil {
+		logger.Fatal("查询钱包数据失败")
+	}
+	logger.Println(string(result))
+}
+
 // 测试Oracle的使用
 func TestOracleWriter(t *testing.T) {
 	// 创建oracle对象
@@ -16,7 +39,8 @@ func TestOracleWriter(t *testing.T) {
 
 func TestWrite(t *testing.T) {
 	oracle := NewOracle()
-	ok, err := oracle.WriteData("0x006ba56143a8f1a5EcB6607a75bf6bc66F345BB0", "lab405_test")
+	taskMap.jobMap["0xca5b322c08d498403051304c4c9ec9092bdeaf381b0804ba1e6c6227c55721cc"] = "0x8Ff1EBd1639dF7ca2FCF67eAcDC7488d567ec040"
+	ok, err := oracle.WriteData("0xca5b322c08d498403051304c4c9ec9092bdeaf381b0804ba1e6c6227c55721cc", "测试数据")
 	if err != nil {
 		log.Fatal("写入错误", err)
 	}
@@ -25,13 +49,15 @@ func TestWrite(t *testing.T) {
 	} else {
 		fmt.Println("写入失败")
 	}
+	select {}
 }
 
 func TestQueryEtcd(t *testing.T) {
-	client := getEtcdClientInstance([]string{"127.0.0.1:2379"}, 100000)
-	response, err := client.Get(context.Background(), "0xf2441c45792b049da8907d5f6a5c94896bcac0b16a48bee4b6ea1b0c338dd309")
+	client, err := getEtcdClient([]string{"127.0.0.1:2379"}, 100000)
+	response, err := client.Get(context.Background(), "0xca5b322c08d498403051304c4c9ec9092bdeaf381b0804ba1e6c6227c55721cc")
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(response)
+	kvs := response.Kvs
+	fmt.Println(kvs)
 }
