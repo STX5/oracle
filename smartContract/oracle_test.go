@@ -2,10 +2,8 @@ package smartcontract
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"io"
 	"log"
@@ -26,6 +24,55 @@ type ethRequest struct {
 type general struct {
 	JsonRPC string `json:"jsonrpc"`
 	ID      int    `json:"id"`
+}
+
+type listWalletsResult struct {
+	Jsonrpc string `json:"jsonrpc"`
+	Id      int    `json:"id"`
+	Result  []struct {
+		Url      string `json:"url"`
+		Status   string `json:"status"`
+		Accounts []struct {
+			Address string `json:"address"`
+			Url     string `json:"url"`
+		} `json:"accounts"`
+	} `json:"result"`
+}
+
+func TestNewOracle(t *testing.T) {
+	// 获取私钥，该私钥是oracle的私钥
+	privateKey, err := crypto.HexToECDSA("")
+	if err != nil {
+	}
+	err, publicKeyAddress := getPublicKeyAddress(privateKey)
+	if err != nil {
+	}
+
+	listWalletRequest := "{\"jsonrpc\":\"2.0\",\"method\":\"personal_listWallets\",\"params\":[],\"id\":1}"
+	listWalletResultBytes, err := invokeJsonRpc("", []byte(listWalletRequest))
+	if err != nil {
+	}
+
+	listWalletResult := new(listWalletsResult)
+	err = json.Unmarshal(listWalletResultBytes, listWalletResult)
+	if err != nil {
+	}
+
+	isLocked := true
+	for _, result := range listWalletResult.Result {
+		for _, account := range result.Accounts {
+			if account.Address == publicKeyAddress.Hex() {
+				if result.Status == "Locked" {
+					isLocked = true
+					break
+				}
+			}
+		}
+	}
+
+	if !isLocked {
+		// 没有被锁住，那么就不进行任何操作
+	}
 }
 
 // 生成ethRequest，Marshal 成[]byte ，传入do函数即可操作ethereum 节点
@@ -53,28 +100,29 @@ func TestJsonRpc(t *testing.T) {
 	//unlockRequest := "{\"jsonrpc\":\"2.0\",\"method\":\"personal_unlockAccount\",\"params\":[\"0x8Ff1EBd1639dF7ca2FCF67eAcDC7488d567ec040\", \"cs237239\", 30],\"id\":1}"
 	//unlockRequest := "{\"jsonrpc\":\"2.0\",\"method\":\"personal_unlockAccount\",\"params\":[\"0x8Ff1EBd1639dF7ca2FCF67eAcDC7488d567ec040\", \"cs237239\", 30]}"
 	//lockRequest := "{\"jsonrpc\":\"2.0\",\"method\":\"personal_lockAccount\",\"params\":[\"0x8Ff1EBd1639dF7ca2FCF67eAcDC7488d567ec040\"],\"id\":1}"
-	listAccounts := "{\"jsonrpc\":\"2.0\",\"method\":\"personal_listWallets\",\"params\":[],\"id\":1}"
+	//listAccounts := "{\"jsonrpc\":\"2.0\",\"method\":\"personal_listWallets\",\"params\":[],\"id\":1}"
+	importRawKey := "{\"jsonrpc\":\"2.0\",\"method\":\"personal_importRawKey\",\"params\":[\"0x8Ff1EBd1639dF7ca2FCF67eAcDC7488d567ec040\", \"cs237239\"],\"id\":1}"
 	//isLockFormat := "{\"jsonrpc\":\"2.0\",\"method\":\"personal_listWallets\",\"params\":[]}"
-	i, err := do([]byte(listAccounts))
+	i, err := do([]byte(importRawKey))
 	if err != nil {
 		fmt.Println(err)
 	}
-	result := new(listWalletsResult)
-	bytes, err := do([]byte(listAccounts))
-	err = json.Unmarshal(bytes, result)
-	fmt.Println(err)
-	fmt.Println(result)
-	privateKey, err := crypto.HexToECDSA("9e082d9aa6240a7af133616ac9f740aa67ba72b0372a366ac9890bb6e9740321")
-	if err != nil {
-		fmt.Println(err)
-	}
-	status := result.Result[0].Status
-	fmt.Println(status)
-	// 获得当前私钥对应的公钥
-	publicKey := privateKey.Public()
-	publicKeyECDSA, _ := publicKey.(*ecdsa.PublicKey)
-	address := crypto.PubkeyToAddress(*publicKeyECDSA)
-	fmt.Println(address == common.HexToAddress("0x8Ff1EBd1639dF7ca2FCF67eAcDC7488d567ec040"))
+	//result := new(listWalletsResult)
+	//bytes, err := do([]byte(importRawKey))
+	//err = json.Unmarshal(bytes, result)
+	//fmt.Println(err)
+	//fmt.Println(result)
+	//privateKey, err := crypto.HexToECDSA("9e082d9aa6240a7af133616ac9f740aa67ba72b0372a366ac9890bb6e9740321")
+	//if err != nil {
+	//	fmt.Println(err)
+	//}
+	//status := result.Result[0].Status
+	//fmt.Println(status)
+	//// 获得当前私钥对应的公钥
+	//publicKey := privateKey.Public()
+	//publicKeyECDSA, _ := publicKey.(*ecdsa.PublicKey)
+	//address := crypto.PubkeyToAddress(*publicKeyECDSA)
+	//fmt.Println(address == common.HexToAddress("0x8Ff1EBd1639dF7ca2FCF67eAcDC7488d567ec040"))
 	fmt.Println(string(i))
 }
 
