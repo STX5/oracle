@@ -26,11 +26,80 @@ go run .
 
 ./etcdctl  --endpoints=localhost:2379 get --prefix --keys-only ''
 ```
-This project is bulit for fault tolerance. You can have multiple `wokers` and `jobDeamons` running, and feel free to shut them down at any time(eg. shut a worker down when its working; shut a jobDeamon down when it detects a lock release event).
+
+This project is bulit for fault tolerance. You can have multiple `wokers` and `jobDeamons` running, and feel free to
+shut them down at any time(eg. shut a worker down when its working; shut a jobDeamon down when it detects a lock release
+event).
 
 As long as there are at least one woker and one jobDeamon, every job will be done exactly once.
 
-## 4. TODOs
+## 5.update worker config
+
+**POST请求**
+
+```shell
+curl --location --request POST 'http://ip:port/update' \
+--header 'Content-Type: application/json' \
+--data-raw '<body data here>'
+```
+
+**请求参数**
+
+| 名称         | 位置   | 类型       | 必选 |
+|------------|------|----------|----|
+| body       | body | object   | 否  |
+| » prefix   | body | string   | 是  |
+| » endpoint | body | [string] | 是  |
+
+**返回结果**
+
+- 请求成功
+
+| 状态码 | 状态码含义    | 说明 |
+|-----|----------|----|
+| 200 | StatusOK | 成功 |
+
+- 请求失败
+
+| 状态码 | 状态码含义                  | 说明        |
+|-----|------------------------|-----------|
+| 400 | StatusBadRequest       | 请求结构体解析失败 |
+| 405 | StatusMethodNotAllowed | 请求方法不支持   |
+
+## 6. update job config
+
+**POST请求**
+
+```shell
+curl --location --request POST 'http://ip:port/update' \
+--header 'Content-Type: application/json' \
+--data-raw '<body data here>'
+```
+
+**请求参数**
+
+| 名称         | 位置   | 类型       | 必选 |
+|------------|------|----------|----|
+| body       | body | object   | 否  |
+| » endpoint | body | [string] | 是  |
+
+**返回结果**
+
+- 请求成功
+
+| 状态码 | 状态码含义    | 说明 |
+|-----|----------|----|
+| 200 | StatusOK | 成功 |
+
+- 请求失败
+
+| 状态码 | 状态码含义                  | 说明        |
+|-----|------------------------|-----------|
+| 400 | StatusBadRequest       | 请求结构体解析失败 |
+| 405 | StatusMethodNotAllowed | 请求方法不支持   |
+
+# 四. TODOs
+
 - 完善job的执行逻辑，使用`pattern`作为css selector/xPath来获得网页特定内容
 - 为job添加超时机制
 - ~~ID为160位的二进制数，需要使用16进制表示以节约空间~~
