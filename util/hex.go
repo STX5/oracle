@@ -6,7 +6,8 @@ import (
 )
 
 // decode hex string to binary string
-// need to manually check return val's length
+//
+// warning: need to manually check return val's length
 func DecodeHex(hID string) (string, error) {
 	decimalNumber := new(big.Int)
 	decimalNumber, success := decimalNumber.SetString(hID, 16)

@@ -1,9 +1,10 @@
 package smartcontract
 
 import (
-	"gopkg.in/yaml.v2"
 	"os"
 	"time"
+
+	"gopkg.in/yaml.v2"
 )
 
 // oracleConfig 定义和oracle相关的配置信息
@@ -22,7 +23,7 @@ type oracleConfig struct {
 }
 
 // 从配置文件中加载配置数据
-func (o *oracleConfig) loadFromYaml(path string) error {
+func (o *oracleConfig) load(path string) error {
 	bytes, err := os.ReadFile(path)
 	if err != nil {
 		return err
@@ -32,4 +33,8 @@ func (o *oracleConfig) loadFromYaml(path string) error {
 		return err
 	}
 	return nil
+}
+
+type configLoader interface {
+	load(path string) error
 }

@@ -9,7 +9,7 @@ import (
 
 func TestConfig(t *testing.T) {
 	config := new(oracleConfig)
-	err := config.loadFromYaml("oracle.yaml")
+	err := config.load("oracle.yaml")
 	if err != nil {
 		log.Fatal(err)
 	}

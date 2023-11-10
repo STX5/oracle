@@ -3,6 +3,7 @@ module oracle
 go 1.20
 
 require (
+	github.com/bytedance/gopkg v0.0.0-20230728082804-614d0af6619b
 	github.com/ethereum/go-ethereum v1.11.6
 	go.etcd.io/etcd/client/v3 v3.5.8
 	gopkg.in/yaml.v2 v2.4.0

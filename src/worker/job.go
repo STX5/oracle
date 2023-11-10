@@ -38,6 +38,7 @@ func (j Job) Scrap() (string, error) {
 
 // Not implemented
 // TODO: add resolver
+// TODO: support MQTT
 func (j Job) resolve(resp *http.Response) (string, error) {
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)

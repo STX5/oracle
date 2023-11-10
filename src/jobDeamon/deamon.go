@@ -25,8 +25,7 @@ func init() {
 // if a ETCD lock expires and its key
 // still exist, means a worker failed.
 // JobDeamon should update this key's version,
-// so other wokers will receive watch event and do it again.
-//
+// so other workers will receive watch event and do it again.
 // JobDeamon should be deployed with every ETCD member node
 type JobDeamon struct {
 	mu         *sync.Mutex

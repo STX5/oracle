@@ -25,7 +25,6 @@ func init() {
 	paraIndex = runtime.NumCPU()
 }
 
-// TODO: add ETH CLIENT(Maybe OracleWriter will include it)
 type Worker struct {
 	// GroupPrefix indecates which group the worker belongs to,
 	// which determines the key range the worker watches
@@ -221,7 +220,7 @@ func (woker Worker) Work(ctx context.Context) {
 				time.Sleep(6 * time.Second) // this is for testing
 				// if success, delete job
 				defer woker.ETCDClient.Delete(context.Background(), job.ID)
-				woker.OracleWriter.WriteData(data)
+				woker.OracleWriter.WriteData(job.ID, data)
 			}(job)
 		}
 	}

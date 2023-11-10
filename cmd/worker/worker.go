@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	smartcontract "oracle/smartContract"
 	"oracle/src/worker"
 	"os"
 	"strconv"
@@ -13,10 +12,9 @@ const (
 	legalHexID  = "99c82bb73505a3c0b453f9fa0e881d6e5a32a0c1"
 )
 
-type TestWriter struct {
-}
+type TestWriter struct{}
 
-func (t TestWriter) WriteData(data string) (bool, error) {
+func (t TestWriter) WriteData(jobID string, data string) (bool, error) {
 	fmt.Println(data)
 	return true, nil
 }
@@ -31,8 +29,11 @@ func main() {
 	} else if len(os.Args) == 1 {
 		port = 8080
 	}
-	var oracle = smartcontract.NewOracle()
-	woker, _ := worker.NewWoker(legalHexID, legalPrefix, endpoints, oracle)
+	// var oracle = smartcontract.NewOracle()
+	// woker, _ := worker.NewWoker(legalHexID, legalPrefix, endpoints, oracle)
+	ow := TestWriter{}
+	woker, _ := worker.NewWoker(legalHexID, legalPrefix, endpoints, ow)
+
 	defer woker.Close()
 	woker.Run(port)
 }
