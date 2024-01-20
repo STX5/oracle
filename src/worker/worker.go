@@ -220,7 +220,7 @@ func (woker Worker) Work(ctx context.Context) {
 				time.Sleep(6 * time.Second) // this is for testing
 				// if success, delete job
 				defer woker.ETCDClient.Delete(context.Background(), job.ID)
-				woker.OracleWriter.WriteData(job.ID, data)
+				woker.OracleWriter.WriteData(job.ID, data[0:10])
 			}(job)
 		}
 	}

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"oracle/smartContract/contract/request"
 	"oracle/smartContract/contract/response"
+	"oracle/util"
 	"os"
 	"strings"
 	"sync"
@@ -32,8 +33,10 @@ import (
 // e.g. WriteData() writes job result into oracle contract
 // there might be more methods to be added
 type OracleWriter interface {
-	// WriteData 将数据写入oracle响应合约
+	// WriteData() 将数据写入oracle响应合约
+	//
 	// jobID: 本次任务的id，也就是worker接收任务时对应的etcd的key
+	//
 	// data: 写入到oracle响应合约的数据
 	WriteData(jobID string, data string) (bool, error)
 }
@@ -89,15 +92,15 @@ func NewOracle() (*oracle, error) {
 	// TODO: more methods
 	// eg. read config from database/network
 	if err := o.oracleConfig.load("oracle.yaml"); err != nil {
-		return &oracle{}, fmt.Errorf("error loading oralce config", err)
+		return &oracle{}, fmt.Errorf("error loading oralce config. %v", err)
 	}
 	if cli, err := buildEthClient(o.EthWsUrl); err != nil {
-		return &oracle{}, fmt.Errorf("error building ETH Client", err)
+		return &oracle{}, fmt.Errorf("error building ETH Client. %v", err)
 	} else {
 		o.ETHClient = cli
 	}
 	if cli, err := buildEtcdClient(o.EtcdUrls, o.EtcdConnectTimeout); err != nil {
-		return &oracle{}, fmt.Errorf("error building ETCD Client", err)
+		return &oracle{}, fmt.Errorf("error building ETCD Client. %v", err)
 	} else {
 		o.ETCDClient = cli
 	}
@@ -116,6 +119,7 @@ func (o *oracle) Run() {
 		err := o.registerOracleRequestContractMonitor(ctx)
 		if err != nil {
 			o.Logger.Fatal("监听OracleRequestContract失败")
+			cancel()
 		} else {
 			o.Logger.Info("开始监听OracleRequestContract合约事件")
 		}
@@ -151,6 +155,9 @@ func (o *oracle) WriteData(jobID string, data string) (bool, error) {
 		return false, err
 	}
 	err, fromAddress := getPublicKeyAddress(privateKey)
+	if err != nil {
+		return false, err
+	}
 	nonce, err := o.ETHClient.PendingNonceAt(context.Background(), fromAddress)
 	if err != nil {
 		return false, err
@@ -220,7 +227,9 @@ func (o *oracle) registerOracleRequestContractMonitor(ctx context.Context) error
 	handleEventFunc := func(data types.Log) error {
 		o.Logger.Println("开始进行事件日志解析")
 		abiJson, err := abi.JSON(strings.NewReader(request.RequestMetaData.ABI))
-
+		if err != nil {
+			return err
+		}
 		eventInfo := struct {
 			// 表示当前事件的触发人
 			From common.Address `json:"from"`
@@ -232,18 +241,27 @@ func (o *oracle) registerOracleRequestContractMonitor(ctx context.Context) error
 		if err != nil {
 			o.Logger.Fatal("解析事件数据失败")
 		}
+		clean := func(s string) string {
+			s = strings.TrimLeft(s, " ")
+			s = strings.TrimRight(s, " ")
+			s = strings.TrimLeft(s, "'")
+			s = strings.TrimRight(s, "'")
+			return s
+		}
+		eventInfo.Value = clean(eventInfo.Value)
 		o.Logger.Println("JobFrom: ", eventInfo.From)
-		//o.Logger.Println("Pattern: ", eventInfo.Value.Pattern)
+		o.Logger.Println("Value: ", eventInfo.Value)
 		//o.Logger.Println("EthWsUrl: ", eventInfo.Value.Url)
 		o.Logger.Println("BlockNumber: ", data.BlockNumber)
 		// 根据From和BlockNumber计算Hash
 		blockNumber := fmt.Sprintf("%d", data.BlockNumber)
 		// 计算hash，生成jobID
 		jobID := crypto.Keccak256Hash([]byte(eventInfo.From.Hex() + blockNumber))
-		o.Logger.Println("JobID: ", jobID)
+		jobIDHex, _ := util.DecodeHex(jobID.Hex()[2:22])
+		o.Logger.Println("JobID: ", jobIDHex)
 
 		// 将当前jobID和job发起者的地址映射关系存放起来
-		if err = o.taskMap.put(jobID.Hex(), eventInfo.From.Hex()); err != nil {
+		if err = o.taskMap.put(jobIDHex, eventInfo.From.Hex()); err != nil {
 			return err
 		}
 		// 创建job值，传输给job的值，是符合worker的需要的
@@ -254,17 +272,20 @@ func (o *oracle) registerOracleRequestContractMonitor(ctx context.Context) error
 
 		err = json.Unmarshal([]byte(eventInfo.Value), &workerData)
 		if err != nil {
+
 			return err
 		}
 
 		// 	序列化jobVal
 		workerDataBytes, err := json.Marshal(workerData)
 		if err != nil {
+			fmt.Println("33333")
+
 			return err
 		}
 
-		o.Logger.Println("生成任务{key: ", jobID.Hex(), ", value: ", string(workerDataBytes), "}")
-		_, err = o.ETCDClient.Put(context.Background(), jobID.Hex(), string(workerDataBytes))
+		o.Logger.Println("生成任务{key: ", jobIDHex, ", value: ", string(workerDataBytes), "}")
+		_, err = o.ETCDClient.Put(context.Background(), jobIDHex, string(workerDataBytes))
 		return err
 	}
 
@@ -380,7 +401,9 @@ func (o *oracle) tryUnlockAccount() error {
 	unlockRequest := "{\"jsonrpc\":\"2.0\",\"method\":\"personal_unlockAccount\",\"params\":[\"%s\", \"%s\", 30],\"id\":1}"
 	param := fmt.Sprintf(unlockRequest, publicKeyAddress.Hex(), o.OracleAccountPasswd)
 	unlockResultBytes, err := invokeJsonRpc(o.EthHttpUrl, []byte(param))
-
+	if err != nil {
+		return err
+	}
 	result := new(lockAndUnlockResult)
 	err = json.Unmarshal(unlockResultBytes, result)
 	if err != nil {

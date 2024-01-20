@@ -2,6 +2,7 @@ package smartcontract
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"testing"
@@ -67,4 +68,17 @@ func TestQueryEtcd(t *testing.T) {
 	}
 	kvs := response.Kvs
 	fmt.Println(kvs)
+}
+
+func TestDecodeEventValue(t *testing.T) {
+	eventValue := `{"url":"www.baidu.com","pattern":"1"}`
+	workerData := struct {
+		URL     string `json:"url"`
+		Pattern string `json:"pattern"`
+	}{}
+	err := json.Unmarshal([]byte(eventValue), &workerData)
+	if err != nil {
+		fmt.Println("22222")
+	}
+	fmt.Println(workerData)
 }

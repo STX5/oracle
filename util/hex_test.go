@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-const legalPrefix = "99"
+const legalPrefix = "0"
 const legalHexID = "99c82bb73505a3c0b453f9fa0e881d6e5a32a0c1"
 const illegalHexID = "xxc82bb73505a3c3b453f9fa0e881d6e5a32a0c1"
 
@@ -14,10 +14,12 @@ func TestLegalHexID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	fmt.Println(b)
 	h, err := DecodeBinary(b)
 	if err != nil {
 		t.Fatal(err)
 	}
+	fmt.Println(h)
 	if h != legalHexID {
 		t.Fatal(h)
 	}
